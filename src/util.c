@@ -33,3 +33,25 @@ FileData readFile(const char* filename)
 
   return (FileData){fileData, bytesRead};
 }
+
+bool writeFile(const char* filename, uint8_t* data, size_t dataLen)
+{
+	FILE* file = fopen(filename, "wb");
+	
+	if (file == NULL)
+	{
+		perror("Error opening file");
+		return 1;
+	}	
+	
+	size_t written = fwrite(data, sizeof(uint8_t), dataLen, file);
+	if (written != dataLen)
+	{
+		perror("Error writing to file");
+		return 1;
+	}
+
+	fclose(file);
+
+	return 0;
+}

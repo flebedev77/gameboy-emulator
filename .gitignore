@@ -4,3 +4,5 @@ testroms/
 testroms/*
 *.o
 *.swp
+*.bin
+*.gb

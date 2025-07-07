@@ -9,3 +9,4 @@ typedef struct {
 } FileData;
 
 FileData readFile(const char*);
+bool     writeFile(const char*, uint8_t*, size_t);

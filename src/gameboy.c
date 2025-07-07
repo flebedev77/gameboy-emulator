@@ -167,7 +167,9 @@ void runGameboy(Gameboy* gb)
     return;
   }
 
-	if (gb->flags & DEBUG)
+	bool debug = gb->flags & DEBUG;
+
+	if (debug)
 	{
 		printf("\nCPU execution log\n");
 		printf(" OP  MEM  ASEM              (EVAL) \n");
@@ -177,6 +179,12 @@ void runGameboy(Gameboy* gb)
 	for (size_t i = 0; i < executeAmountInstructions; i++)
 	{
 		executeInstruction(gb);
+	}
+
+	if (debug)
+	{
+		printf("Writing memory dump to %s\n", MEMORY_DUMPFILENAME);
+		writeFile(MEMORY_DUMPFILENAME, gb->memory, MEMORY_SIZE);
 	}
 }
 

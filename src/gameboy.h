@@ -2,10 +2,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <string.h>
 #include "util.h"
 
 #define MEMORY_SIZE 0x10000
+#define MEMORY_DUMPFILENAME "memory.bin"
 
 enum GameboyFlags
 {
