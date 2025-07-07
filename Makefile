@@ -2,7 +2,7 @@ CC = gcc
 
 CFLAGS = -Wall -Wextra -g
 
-SRCS = src/main.c src/util.c src/gameboy.c src/ins_decoder.c
+SRCS = src/main.c src/util.c src/gameboy.c
 
 OBJ_DIR = build
 OBJS = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(SRCS))

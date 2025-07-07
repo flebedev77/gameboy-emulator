@@ -2,11 +2,13 @@
 
 int main()
 {
-  Gameboy gb;
+  Gameboy gb = {};
   gb.flags |= VERBOSE;
 
-  initGameboy(&gb, "testroms/tetris.gb");
+  initGameboy(&gb, "testroms/basic.gb");
+
   runGameboy(&gb);
 
+	destroyGameboy(&gb);
   return 0;
 }

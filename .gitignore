@@ -3,3 +3,4 @@ build/*
 testroms/
 testroms/*
 *.o
+*.swp

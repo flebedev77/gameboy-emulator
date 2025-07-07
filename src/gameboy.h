@@ -1,7 +1,11 @@
 #pragma once
 #include <stdio.h>
+#include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "util.h"
+
+#define MEMORY_SIZE 0x10000
 
 enum GameboyFlags
 {
@@ -9,12 +13,42 @@ enum GameboyFlags
   VERBOSE = 1 << 1
 };
 
+enum CPUFlags
+{
+	Z = 1 << 7, // Zero
+	N = 1 << 6, // Subtract
+	H = 1 << 5, // Half carry
+	C = 1 << 4  // Carry
+};
+
+typedef struct 
+{
+	uint16_t PC;
+	uint16_t SP; 	
+
+	uint8_t A,
+					B,
+					C,
+					D,
+					E,
+					H,
+					L;
+
+	uint8_t F;
+} CPU;
+
 typedef struct 
 {
   FileData rom; 
   int flags;
+
+	uint8_t* memory;
+
+	CPU cpu;
 } Gameboy;
 
 void initGameboy(Gameboy*, const char* romFilename);
 
 void runGameboy(Gameboy*);
+
+void destroyGameboy(Gameboy*);
