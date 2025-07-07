@@ -5,7 +5,7 @@ int main()
   Gameboy gb = {};
   gb.flags = VERBOSE | DEBUG;
 
-  initGameboy(&gb, "testroms/basic.gb");
+  initGameboy(&gb, "testroms/tetris.gb");
 
   runGameboy(&gb);
 

@@ -51,35 +51,104 @@ uint8_t fetch(Gameboy* gb)
 	return byte;
 }
 
+uint16_t bytesToWord(uint8_t H, uint8_t L)
+{
+	return (H << 8) + L;
+}
+
+void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
+{
+	*L = word & 0x00FF;
+	*H = (word >> 8) & 0x00FF; 
+}
+
+uint16_t fetchWord(Gameboy* gb)
+{ // fetches two bytes, swaps them around and adds them
+	return bytesToWord(fetch(gb), fetch(gb));
+}
+
 void executeInstruction(Gameboy* gb)
 {
 	bool debug = gb->flags & DEBUG;
 
 	uint8_t ins = fetch(gb);	
 
-	if (debug) printf(" %x ", ins);
+	uint16_t addr = 0x0000;
+	uint8_t value = 0x00;
+
+	if (debug) printf(" %02X $%04X ", ins, gb->cpu.PC-1);
 
 	switch(ins)
 	{
+		case 0x00: // NOP
+				if (debug) printf("NOP\n");
+			break;
 		case 0xC3: // JP a16
-			uint16_t addrBytes[2];
-			addrBytes[0] = fetch(gb);
-			addrBytes[1] = fetch(gb);
-			uint16_t addr = (addrBytes[1] << 8) + addrBytes[0];
+			addr = fetchWord(gb);
 			gb->cpu.PC = addr;
-			gb->cpu.cycles += 16;
+			gb->cpu.cycles += 13;
 
-			if (debug) printf("JP  $%x\n", addr);
+			if (debug) printf("JP  $%04X\n", addr);
 			break;
 		case 0x3E: // LDA n8
-			uint8_t value = fetch(gb);	
+			value = fetch(gb);	
 			gb->cpu.A = value;
-			gb->cpu.cycles += 8;
+			gb->cpu.cycles += 7;
 
-			if (debug) printf("LDA $%x\n", value);
+			if (debug) printf("LDA $%04X\n", value);
 			break;
+		case 0xAF: // XOR A, A
+			gb->cpu.A ^= gb->cpu.A;
+
+			if (gb->cpu.A == 0)
+			{
+				gb->cpu.F |= Z;
+			} else
+			{
+				gb->cpu.F &= ~Z;	
+			}
+			gb->cpu.F &= ~(N | H | C);
+
+			gb->cpu.cycles += 3;	
+			if (debug) printf("XOR A, A\n");
+			break;
+		case 0x21: // LD HL, n16
+			uint8_t bytes[2];
+			bytes[0] = fetch(gb);
+			bytes[1] = fetch(gb);
+
+			gb->cpu.H = bytes[1];
+			gb->cpu.L = bytes[0];
+
+			gb->cpu.cycles += 9; // 1 is used to read the op code, two are used to read the word. This instruction is meant to take 12 cycles
+			if (debug) printf("LD HL, $%02X%02X\n", bytes[1], bytes[0]);
+			break;
+		case 0x0E: // LDC n8
+			value = fetch(gb);
+			gb->cpu.C = value;
+
+			gb->cpu.cycles += 6;
+			if (debug) printf("LDC $%02X\n", value);
+			break;
+		case 0x06: // LDB n8
+			value = fetch(gb);
+			gb->cpu.B = value;
+
+			gb->cpu.cycles += 6;
+			if (debug) printf("LDB $%02X\n", value);
+			break;
+		case 0x32: // LD [HL-], A
+			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
+			gb->memory[addr] = gb->cpu.A;	
+
+			wordToBytes(&gb->cpu.H, &gb->cpu.L, addr-1); 
+
+			gb->cpu.cycles += 7;	
+			if (debug) printf("LD [HL-], A   (LD $%04X, $%02X)\n", addr, gb->cpu.A);
+			break;
+
 		default:
-			if (debug) printf("Unknown opcode %x\n", ins);
+			if (debug) printf("Unknown opcode %02X\n", ins);
 			break;
 	}
 }
@@ -97,6 +166,12 @@ void runGameboy(Gameboy* gb)
     perror("Gameboy was not initialized");
     return;
   }
+
+	if (gb->flags & DEBUG)
+	{
+		printf("\nCPU execution log\n");
+		printf(" OP  MEM  ASEM              (EVAL) \n");
+	}
 
 	size_t executeAmountInstructions = 10;
 	for (size_t i = 0; i < executeAmountInstructions; i++)
