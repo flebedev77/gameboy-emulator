@@ -2,13 +2,13 @@
 
 int main()
 {
-  Gameboy gb = {};
-  gb.flags = VERBOSE | DEBUG;
+	Gameboy gb = {};
+	gb.flags = VERBOSE | DEBUG;
 
-  initGameboy(&gb, "testroms/tetris.gb");
+	initGameboy(&gb, "testroms/tetris.gb");
 
-  runGameboy(&gb);
+	runGameboy(&gb);
 
 	destroyGameboy(&gb);
-  return 0;
+	return 0;
 }

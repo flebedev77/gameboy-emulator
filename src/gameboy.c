@@ -2,19 +2,19 @@
 
 void initGameboy(Gameboy* gb, const char* romFilename)
 {
-  if (gb == NULL)
-  {
-    perror("Gameboy passed was invalid");    
-    return;
-  }
+	if (gb == NULL)
+	{
+		perror("Gameboy passed was invalid");    
+		return;
+	}
 
-  gb->flags |= INITED;
+	gb->flags |= INITED;
 
-  gb->rom = readFile(romFilename);
+	gb->rom = readFile(romFilename);
 
 	bool verbose = gb->flags & VERBOSE;
-  if (verbose)
-    printf("ROM: %ld bytes read from %s\n", gb->rom.len, romFilename);
+	if (verbose)
+		printf("ROM: %ld bytes read from %s\n", gb->rom.len, romFilename);
 
 	gb->cpu = (CPU){};
 	gb->cpu.PC = 0x0100;
@@ -81,7 +81,7 @@ void executeInstruction(Gameboy* gb)
 	switch(ins)
 	{
 		case 0x00: // NOP
-				if (debug) printf("NOP\n");
+			if (debug) printf("NOP\n");
 			break;
 		case 0xC3: // JP a16
 			addr = fetchWord(gb);
@@ -155,17 +155,17 @@ void executeInstruction(Gameboy* gb)
 
 void runGameboy(Gameboy* gb)
 {
-  if (gb == NULL)
-  {
-    perror("Gameboy passed was invalid");
-    return;
-  }
+	if (gb == NULL)
+	{
+		perror("Gameboy passed was invalid");
+		return;
+	}
 
-  if (!(gb->flags & INITED))
-  {
-    perror("Gameboy was not initialized");
-    return;
-  }
+	if (!(gb->flags & INITED))
+	{
+		perror("Gameboy was not initialized");
+		return;
+	}
 
 	bool debug = gb->flags & DEBUG;
 

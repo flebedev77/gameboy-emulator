@@ -11,8 +11,8 @@
 
 enum GameboyFlags
 {
-  INITED = 1 << 0,
-  VERBOSE = 1 << 1,
+	INITED = 1 << 0,
+	VERBOSE = 1 << 1,
 	DEBUG = 1 << 2
 };
 
@@ -44,8 +44,8 @@ typedef struct
 
 typedef struct 
 {
-  FileData rom; 
-  int flags;
+	FileData rom; 
+	int flags;
 
 	uint8_t* memory;
 
