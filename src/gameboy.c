@@ -43,6 +43,47 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 		printf("Initialisation complete\n");
 }
 
+uint8_t fetch(Gameboy* gb)
+{
+	uint8_t byte = gb->memory[gb->cpu.PC];
+	gb->cpu.PC++;
+	gb->cpu.cycles++;
+	return byte;
+}
+
+void executeInstruction(Gameboy* gb)
+{
+	bool debug = gb->flags & DEBUG;
+
+	uint8_t ins = fetch(gb);	
+
+	if (debug) printf(" %x ", ins);
+
+	switch(ins)
+	{
+		case 0xC3: // JP a16
+			uint16_t addrBytes[2];
+			addrBytes[0] = fetch(gb);
+			addrBytes[1] = fetch(gb);
+			uint16_t addr = (addrBytes[1] << 8) + addrBytes[0];
+			gb->cpu.PC = addr;
+			gb->cpu.cycles += 16;
+
+			if (debug) printf("JP  $%x\n", addr);
+			break;
+		case 0x3E: // LDA n8
+			uint8_t value = fetch(gb);	
+			gb->cpu.A = value;
+			gb->cpu.cycles += 8;
+
+			if (debug) printf("LDA $%x\n", value);
+			break;
+		default:
+			if (debug) printf("Unknown opcode %x\n", ins);
+			break;
+	}
+}
+
 void runGameboy(Gameboy* gb)
 {
   if (gb == NULL)
@@ -57,6 +98,11 @@ void runGameboy(Gameboy* gb)
     return;
   }
 
+	size_t executeAmountInstructions = 10;
+	for (size_t i = 0; i < executeAmountInstructions; i++)
+	{
+		executeInstruction(gb);
+	}
 }
 
 void destroyGameboy(Gameboy* gb)

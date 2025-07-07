@@ -10,7 +10,8 @@
 enum GameboyFlags
 {
   INITED = 1 << 0,
-  VERBOSE = 1 << 1
+  VERBOSE = 1 << 1,
+	DEBUG = 1 << 2
 };
 
 enum CPUFlags
@@ -35,6 +36,8 @@ typedef struct
 					L;
 
 	uint8_t F;
+
+	uint32_t cycles;
 } CPU;
 
 typedef struct 
