@@ -29,6 +29,8 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->cpu.H = 0x84;
 	gb->cpu.L = 0x03;
 
+	gb->cpu.IME = 1;
+
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
@@ -41,6 +43,74 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 
 	if (verbose)
 		printf("Initialisation complete\n");
+}
+
+void performDump(Gameboy* gb)
+{
+	printf("Writing memory dump to %s\n", MEMORY_DUMPFILENAME);
+	writeFile(MEMORY_DUMPFILENAME, gb->memory, MEMORY_SIZE);
+
+	printf("Writing cpu dump to %s\n", CPU_DUMPFILENAME);
+	char buf[142];
+	snprintf(buf, sizeof(buf), "A  = $%02X\nB  = $%02X\nC  = $%02X\nD  = $%02X\nE  = $%02X\nH  = $%02X\nL  = $%02X\nF  = $%02X\nPC = $%04X\nSP = $%04X\n",
+			gb->cpu.A,
+			gb->cpu.B,
+			gb->cpu.C,
+			gb->cpu.D,
+			gb->cpu.E,
+			gb->cpu.H,
+			gb->cpu.L,
+			gb->cpu.F,
+			gb->cpu.PC,
+			gb->cpu.SP			
+			);
+	writeFile(CPU_DUMPFILENAME, (uint8_t*)buf, 0x5F); // My dumbass can't calculate the length of a string properly
+}
+
+void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
+{
+	uint16_t result = (uint16_t)*reg - (uint16_t)value; 
+	uint8_t carry_per_bit[8]; 
+
+	*reg = (uint8_t)result;
+
+	
+	for (int i = 0; i < 8; i++) {
+		carry_per_bit[i] = ((*reg >> i) & 1) - ((value >> i) & 1) < 0 ? 1 : 0;
+	}
+
+	if (result == 0)
+		gb->cpu.F |= Z;
+	else
+		gb->cpu.F &= ~Z;
+
+	gb->cpu.F |= N;
+
+	if (carry_per_bit[3])
+		gb->cpu.F |= H;
+	else 
+		gb->cpu.F &= ~H;
+
+	if (carry_per_bit[7])
+		gb->cpu.F |= C;
+	else
+		gb->cpu.F &= ~carry_per_bit[7];	
+}
+
+void decRegister(Gameboy* gb, uint8_t* reg)
+{
+	subRegister(gb, reg, 1);
+}
+
+void writeMemory(Gameboy* gb, uint16_t addr, uint8_t value)
+{
+	gb->memory[addr] = value;
+	gb->cpu.cycles++;	
+}
+uint8_t readMemory(Gameboy* gb, uint16_t addr)
+{
+	gb->cpu.cycles++;
+	return gb->memory[addr];
 }
 
 uint8_t fetch(Gameboy* gb)
@@ -74,6 +144,7 @@ void executeInstruction(Gameboy* gb)
 	uint8_t ins = fetch(gb);	
 
 	uint16_t addr = 0x0000;
+	int8_t raddr = 0x00;
 	uint8_t value = 0x00;
 
 	if (debug) printf(" %02X $%04X ", ins, gb->cpu.PC-1);
@@ -95,18 +166,16 @@ void executeInstruction(Gameboy* gb)
 			gb->cpu.A = value;
 			gb->cpu.cycles += 7;
 
-			if (debug) printf("LDA $%04X\n", value);
+			if (debug) printf("LDA $%02X\n", value);
 			break;
 		case 0xAF: // XOR A, A
 			gb->cpu.A ^= gb->cpu.A;
 
 			if (gb->cpu.A == 0)
-			{
 				gb->cpu.F |= Z;
-			} else
-			{
+			else
 				gb->cpu.F &= ~Z;	
-			}
+
 			gb->cpu.F &= ~(N | H | C);
 
 			gb->cpu.cycles += 3;	
@@ -139,12 +208,68 @@ void executeInstruction(Gameboy* gb)
 			break;
 		case 0x32: // LD [HL-], A
 			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
-			gb->memory[addr] = gb->cpu.A;	
+			writeMemory(gb, addr, gb->cpu.A);
 
 			wordToBytes(&gb->cpu.H, &gb->cpu.L, addr-1); 
 
-			gb->cpu.cycles += 7;	
+			gb->cpu.cycles += 6;	
 			if (debug) printf("LD [HL-], A   (LD $%04X, $%02X)\n", addr, gb->cpu.A);
+			break;
+		case 0xE0: // LDH [n], A
+			value = fetch(gb);	
+			addr = bytesToWord(0xFF, value);
+			writeMemory(gb, addr, gb->cpu.A);
+			
+			if (debug) printf("LDH [$%04X], A\n", addr);
+			break;
+		case 0xF0: // LDH A, [n]
+			value = fetch(gb);
+			addr = bytesToWord(0xFF, value);	
+			gb->cpu.A = readMemory(gb, addr);
+
+			if (debug) printf("LDH A, [$%04X]\n", addr);
+			break;	
+		case 0x05: // DEC B
+			value = gb->cpu.B;
+			decRegister(gb, &gb->cpu.B);	
+			
+			if (debug) printf("DEC B         (DEC $%02X)\n", value);
+			break;
+		case 0x0D: // DEC C
+			value = gb->cpu.C;
+			decRegister(gb, &gb->cpu.C);	
+			
+			if (debug) printf("DEC C         (DEC $%02X)\n", value);
+			break;
+		case 0x20: // JR NZ, e8
+			raddr = (int8_t)fetch(gb);
+				
+			if (!(gb->cpu.F & Z))
+			{
+				gb->cpu.PC += raddr;
+				gb->cpu.cycles += 10;
+			} else
+			{
+				gb->cpu.cycles += 6;
+			}
+
+			if (debug) printf("JR NZ, %d\n", raddr);
+			break;
+		case 0xFE: // CP n8
+			value = fetch(gb);
+			uint8_t A = gb->cpu.A;
+
+			subRegister(gb, &gb->cpu.A, value);
+
+			gb->cpu.A = A;
+
+			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, A, value);
+			break;
+		case 0xF3: // DI
+			gb->cpu.IME = 0;
+			gb->cpu.cycles += 3;
+
+			if (debug) printf("DI\n");
 			break;
 
 		default:
@@ -175,7 +300,7 @@ void runGameboy(Gameboy* gb)
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 	}
 
-	size_t executeAmountInstructions = 10;
+	size_t executeAmountInstructions = (0x00FF * 3) * 0x40;
 	for (size_t i = 0; i < executeAmountInstructions; i++)
 	{
 		executeInstruction(gb);
@@ -183,8 +308,7 @@ void runGameboy(Gameboy* gb)
 
 	if (debug)
 	{
-		printf("Writing memory dump to %s\n", MEMORY_DUMPFILENAME);
-		writeFile(MEMORY_DUMPFILENAME, gb->memory, MEMORY_SIZE);
+		performDump(gb);
 	}
 }
 

@@ -9,6 +9,8 @@
 #define MEMORY_SIZE 0x10000
 #define MEMORY_DUMPFILENAME "memory.bin"
 
+#define CPU_DUMPFILENAME "cpu.bin"
+
 enum GameboyFlags
 {
 	INITED = 1 << 0,
@@ -38,6 +40,8 @@ typedef struct
 					L;
 
 	uint8_t F;
+
+	bool IME;
 
 	uint32_t cycles;
 } CPU;

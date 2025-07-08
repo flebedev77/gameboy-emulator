@@ -6,3 +6,4 @@ testroms/*
 *.swp
 *.bin
 *.gb
+*.log
