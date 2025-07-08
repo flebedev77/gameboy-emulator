@@ -10,6 +10,17 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 
 	gb->flags |= INITED;
 
+
+	if (!(gb->flags & GRAPHICS_DISABLED))
+	{
+		memset(&gb->graphics, 0, sizeof(Graphics));
+		if (initGraphics(&gb->graphics, SCREEN_WIDTH, SCREEN_HEIGHT) > 0)
+		{
+			perror("Could not initialise graphics backend: SDL\n");
+			return;
+		}
+	}
+
 	gb->rom = readFile(romFilename);
 
 	bool verbose = gb->flags & VERBOSE;
@@ -278,6 +289,11 @@ void executeInstruction(Gameboy* gb)
 	}
 }
 
+void executePPUCycle(Gameboy* gb)
+{
+	// TODO: write out everything to a texture in the graphics struct
+}
+
 void runGameboy(Gameboy* gb)
 {
 	if (gb == NULL)
@@ -300,10 +316,21 @@ void runGameboy(Gameboy* gb)
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 	}
 
-	size_t executeAmountInstructions = (0x00FF * 3) * 0x40;
-	for (size_t i = 0; i < executeAmountInstructions; i++)
+	//updateGraphics(&gb->graphics);
+	//size_t executeAmountInstructions = (0x00FF * 3) * 0x40;
+	//for (size_t i = 0; i < executeAmountInstructions; i++)
+	//{
+	//	executeInstruction(gb);
+	//}
+	
+	while (!gb->graphics.shouldQuit)
 	{
 		executeInstruction(gb);
+
+		if (!(gb->flags & GRAPHICS_DISABLED))
+			updateGraphics(&gb->graphics);
+
+		sleepMs(MS_PER_CYCLE);
 	}
 
 	if (debug)
@@ -322,4 +349,7 @@ void destroyGameboy(Gameboy* gb)
 
 	free(gb->rom.data);
 	free(gb->memory);
+
+	if (!(gb->flags & GRAPHICS_DISABLED))
+		destroyGraphics(&gb->graphics);
 }

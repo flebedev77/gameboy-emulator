@@ -5,9 +5,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include "util.h"
+#include "graphics.h"
+
+#define SCREEN_WIDTH 160
+#define SCREEN_HEIGHT 144
 
 #define MEMORY_SIZE 0x10000
 #define MEMORY_DUMPFILENAME "memory.bin"
+
+#define GAMEBOY_CLOCK_SPEED_HZ 4194304
+#define MS_PER_CYCLE (1000 / GAMEBOY_CLOCK_SPEED_HZ)
 
 #define CPU_DUMPFILENAME "cpu.bin"
 
@@ -15,7 +22,8 @@ enum GameboyFlags
 {
 	INITED = 1 << 0,
 	VERBOSE = 1 << 1,
-	DEBUG = 1 << 2
+	DEBUG = 1 << 2,
+	GRAPHICS_DISABLED = 1 << 3
 };
 
 enum CPUFlags
@@ -54,6 +62,8 @@ typedef struct
 	uint8_t* memory;
 
 	CPU cpu;
+
+	Graphics graphics;
 } Gameboy;
 
 void initGameboy(Gameboy*, const char* romFilename);

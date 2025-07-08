@@ -55,3 +55,13 @@ bool writeFile(const char* filename, uint8_t* data, size_t dataLen)
 
 	return 0;
 }
+
+void sleepMs(int milliseconds) {
+#ifdef _WIN32
+    Sleep(milliseconds); // Windows
+#elif defined(__EMSCRIPTEN__)
+    emscripten_sleep(milliseconds); // WASM
+#else
+    usleep(milliseconds * 1000); // POSIX (Linux, macOS)
+#endif
+}

@@ -1,8 +1,9 @@
 CC = gcc
 
 CFLAGS = -Wall -Wextra -g
+LINK_FLAGS = -lSDL2
 
-SRCS = src/main.c src/util.c src/gameboy.c
+SRCS = src/main.c src/util.c src/gameboy.c src/graphics.c
 
 OBJ_DIR = build
 OBJS = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(SRCS))
@@ -12,7 +13,7 @@ TARGET = $(OBJ_DIR)/gbemu
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) -o $@ $^
+	$(CC) -o $@ $^ $(LINK_FLAGS)
 
 $(OBJ_DIR)/%.o: src/%.c
 	@mkdir -p $(OBJ_DIR)  
