@@ -45,6 +45,8 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
+	gb->memory[0xFF44] = 148; // Gaslight the program into thinking we in vblank
+
 	if (verbose)
 		printf("Copying rom (%ld bytes) into memory map (%d bytes)\n", gb->rom.len, MEMORY_SIZE);
 	for (size_t i = 0; i < gb->rom.len; i++)
@@ -54,6 +56,7 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 
 	if (verbose)
 		printf("Initialisation complete\n");
+
 }
 
 void performDump(Gameboy* gb)
@@ -78,39 +81,15 @@ void performDump(Gameboy* gb)
 	writeFile(CPU_DUMPFILENAME, (uint8_t*)buf, 0x5F); // My dumbass can't calculate the length of a string properly
 }
 
-void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
+uint16_t bytesToWord(uint8_t H, uint8_t L)
 {
-	uint16_t result = (uint16_t)*reg - (uint16_t)value; 
-	uint8_t carry_per_bit[8]; 
-
-	*reg = (uint8_t)result;
-
-	
-	for (int i = 0; i < 8; i++) {
-		carry_per_bit[i] = ((*reg >> i) & 1) - ((value >> i) & 1) < 0 ? 1 : 0;
-	}
-
-	if (result == 0)
-		gb->cpu.F |= Z;
-	else
-		gb->cpu.F &= ~Z;
-
-	gb->cpu.F |= N;
-
-	if (carry_per_bit[3])
-		gb->cpu.F |= H;
-	else 
-		gb->cpu.F &= ~H;
-
-	if (carry_per_bit[7])
-		gb->cpu.F |= C;
-	else
-		gb->cpu.F &= ~carry_per_bit[7];	
+	return (H << 8) + L;
 }
 
-void decRegister(Gameboy* gb, uint8_t* reg)
+void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
 {
-	subRegister(gb, reg, 1);
+	*L = word & 0x00FF;
+	*H = (word >> 8) & 0x00FF; 
 }
 
 void writeMemory(Gameboy* gb, uint16_t addr, uint8_t value)
@@ -124,6 +103,107 @@ uint8_t readMemory(Gameboy* gb, uint16_t addr)
 	return gb->memory[addr];
 }
 
+void pushStack(Gameboy* gb, uint8_t value)
+{
+	gb->cpu.SP--; // Subtract before setting value, because the stack grows downwards, and the SP points to the latest value
+	
+	writeMemory(gb, gb->cpu.SP, value);
+}
+
+uint8_t popStack(Gameboy* gb)
+{
+	uint8_t value = readMemory(gb, gb->cpu.SP);
+	gb->cpu.SP++;
+	return value;
+}
+
+void pushStackWord(Gameboy* gb, uint16_t value)
+{
+	uint8_t lb, hb;
+	wordToBytes(&hb, &lb, value);
+	pushStack(gb, hb); // Stack here in reverse order of the endianess
+	pushStack(gb, lb);
+}
+
+uint16_t popStackWord(Gameboy* gb)
+{
+	uint8_t lb = popStack(gb);
+	uint8_t hb = popStack(gb);
+	return bytesToWord(hb, lb);
+}
+
+void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
+{
+	uint16_t result = (uint16_t)*reg + (uint16_t)value; 
+	uint8_t carryPerBit[8]; 
+
+	*reg = (uint8_t)result;
+
+	
+	for (int i = 0; i < 8; i++) {
+		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) < 0 ? 1 : 0;
+	}
+
+	if (result == 0)
+		gb->cpu.F |= Z;
+	else
+		gb->cpu.F &= ~Z;
+
+	gb->cpu.F |= N;
+
+	if (carryPerBit[3])
+		gb->cpu.F |= H;
+	else 
+		gb->cpu.F &= ~H;
+
+	if (carryPerBit[7])
+		gb->cpu.F |= C;
+	else
+		gb->cpu.F &= ~carryPerBit[7];	
+}
+
+void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
+{
+	uint16_t result = (uint16_t)*reg - (uint16_t)value; 
+	uint8_t carryPerBit[8]; 
+
+	*reg = (uint8_t)result;
+
+	
+	for (int i = 0; i < 8; i++) {
+		carryPerBit[i] = ((*reg >> i) & 1) - ((value >> i) & 1) < 0 ? 1 : 0;
+	}
+
+	if (result == 0)
+		gb->cpu.F |= Z;
+	else
+		gb->cpu.F &= ~Z;
+
+	gb->cpu.F |= N;
+
+	if (carryPerBit[3])
+		gb->cpu.F |= H;
+	else 
+		gb->cpu.F &= ~H;
+
+	if (carryPerBit[7])
+		gb->cpu.F |= C;
+	else
+		gb->cpu.F &= ~carryPerBit[7];	
+}
+
+void orRegister(Gameboy* gb, uint8_t* reg)
+{
+	gb->cpu.A = gb->cpu.A | *reg;	
+
+	if (gb->cpu.A == 0)
+		gb->cpu.F |= Z;
+	else
+		gb->cpu.F &= ~Z;
+
+	gb->cpu.F &= ~(N | H | C);
+}
+
 uint8_t fetch(Gameboy* gb)
 {
 	uint8_t byte = gb->memory[gb->cpu.PC];
@@ -132,20 +212,22 @@ uint8_t fetch(Gameboy* gb)
 	return byte;
 }
 
-uint16_t bytesToWord(uint8_t H, uint8_t L)
+uint8_t fetchStack(Gameboy* gb)
 {
-	return (H << 8) + L;
-}
-
-void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
-{
-	*L = word & 0x00FF;
-	*H = (word >> 8) & 0x00FF; 
+	uint8_t byte = gb->memory[gb->cpu.SP];
+	gb->cpu.SP--;
+	gb->cpu.cycles++;
+	return byte;
 }
 
 uint16_t fetchWord(Gameboy* gb)
 { // fetches two bytes, swaps them around and adds them
 	return bytesToWord(fetch(gb), fetch(gb));
+}
+
+uint16_t fetchWordStack(Gameboy* gb)
+{
+	return bytesToWord(fetchStack(gb), fetchStack(gb));
 }
 
 void executeInstruction(Gameboy* gb)
@@ -155,6 +237,7 @@ void executeInstruction(Gameboy* gb)
 	uint8_t ins = fetch(gb);	
 
 	uint16_t addr = 0x0000;
+	uint16_t word = 0x0000;
 	int8_t raddr = 0x00;
 	uint8_t value = 0x00;
 
@@ -172,12 +255,48 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("JP  $%04X\n", addr);
 			break;
-		case 0x3E: // LDA n8
-			value = fetch(gb);	
-			gb->cpu.A = value;
-			gb->cpu.cycles += 7;
+		case 0x20: // JR NZ, e8
+			raddr = (int8_t)fetch(gb);
+				
+			if (!(gb->cpu.F & Z))
+			{
+				gb->cpu.PC += raddr;
+				gb->cpu.cycles += 10;
+			} else
+			{
+				gb->cpu.cycles += 6;
+			}
 
-			if (debug) printf("LDA $%02X\n", value);
+			if (debug) printf("JR NZ, %d\n", raddr);
+			break;
+		case 0xCD: // CALL a16
+			addr = fetchWord(gb);
+			
+			pushStackWord(gb, gb->cpu.PC);	
+
+			gb->cpu.PC = addr;
+
+			if (debug) printf("CALL $%04X\n", addr);
+			break;
+		case 0xC9: // RET
+			gb->cpu.PC = popStackWord(gb);
+
+			if (debug) printf("RET        (JP $%04X)\n", gb->cpu.PC);
+			break;
+		case 0xE2: // POP HL
+			wordToBytes(&gb->cpu.H, &gb->cpu.L, fetchWordStack(gb));	
+
+			if (debug) printf("POP HL        (HL=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.H, gb->cpu.L), gb->cpu.SP);
+			break;
+		case 0xFE: // CP n8
+			value = fetch(gb);
+			uint8_t A = gb->cpu.A;
+
+			subRegister(gb, &gb->cpu.A, value);
+
+			gb->cpu.A = A;
+
+			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, A, value);
 			break;
 		case 0xAF: // XOR A, A
 			gb->cpu.A ^= gb->cpu.A;
@@ -192,16 +311,30 @@ void executeInstruction(Gameboy* gb)
 			gb->cpu.cycles += 3;	
 			if (debug) printf("XOR A, A\n");
 			break;
-		case 0x21: // LD HL, n16
-			uint8_t bytes[2];
-			bytes[0] = fetch(gb);
-			bytes[1] = fetch(gb);
+		case 0xB1: //OR A, C
+			value = gb->cpu.A;
+			orRegister(gb, &gb->cpu.C);
 
-			gb->cpu.H = bytes[1];
-			gb->cpu.L = bytes[0];
+			if (debug) printf("OR A, C         (OR $%02X $%02X)\n", value, gb->cpu.C);
+			break;
+		case 0x3E: // LDA n8
+			value = fetch(gb);	
+			gb->cpu.A = value;
+			gb->cpu.cycles += 7;
+
+			if (debug) printf("LDA $%02X\n", value);
+			break;
+		case 0x78: // LD A, B
+			gb->cpu.A = gb->cpu.B;
+
+			if (debug) printf("LD A, B         (LDA $%02X)\n", gb->cpu.B);
+			break;	
+		case 0x21: // LD HL, n16
+			word = fetchWord(gb);
+			wordToBytes(&gb->cpu.H, &gb->cpu.L, word);
 
 			gb->cpu.cycles += 9; // 1 is used to read the op code, two are used to read the word. This instruction is meant to take 12 cycles
-			if (debug) printf("LD HL, $%02X%02X\n", bytes[1], bytes[0]);
+			if (debug) printf("LD HL, $%04X\n", word);
 			break;
 		case 0x0E: // LDC n8
 			value = fetch(gb);
@@ -217,6 +350,12 @@ void executeInstruction(Gameboy* gb)
 			gb->cpu.cycles += 6;
 			if (debug) printf("LDB $%02X\n", value);
 			break;
+		case 0x01: // LD BC, n16
+			word = fetchWord(gb);
+			wordToBytes(&gb->cpu.B, &gb->cpu.C, word);
+
+			if (debug) printf("LD BC, $%04X\n", word);
+			break;
 		case 0x32: // LD [HL-], A
 			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
 			writeMemory(gb, addr, gb->cpu.A);
@@ -226,14 +365,42 @@ void executeInstruction(Gameboy* gb)
 			gb->cpu.cycles += 6;	
 			if (debug) printf("LD [HL-], A   (LD $%04X, $%02X)\n", addr, gb->cpu.A);
 			break;
-		case 0xE0: // LDH [n], A
+		case 0x2A: // LD A, [HL+]
+			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
+			gb->cpu.A = readMemory(gb, addr);
+
+			wordToBytes(&gb->cpu.H, &gb->cpu.L, addr+1);
+
+			if (debug) printf("LD A, [HL+]   (LDA $%02X)\n", gb->cpu.A);
+			break;
+		case 0x36: // LD [HL], n8
+			value = fetch(gb);
+			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
+			writeMemory(gb, addr, value);
+
+			gb->cpu.cycles += 2;
+			if (debug) printf("LD [HL], $%02X  (LD $%04X, $%02X)\n", value, addr, value);
+			break;
+		case 0xEA: // LD [a16], A
+			addr = fetchWord(gb);
+			writeMemory(gb, addr, gb->cpu.A);
+
+			if (debug) printf("LD [$%04X], A (LD $%04X, $%02X)\n", addr, addr, gb->cpu.A);
+			break;
+		case 0x31: // LD SP, n16
+			addr = fetchWord(gb);
+			gb->cpu.SP = addr;
+			gb->cpu.cycles += 3;
+			if (debug) printf("LD SP, $%04X\n", addr);
+			break;
+		case 0xE0: // LDH [a8], A
 			value = fetch(gb);	
 			addr = bytesToWord(0xFF, value);
 			writeMemory(gb, addr, gb->cpu.A);
 			
 			if (debug) printf("LDH [$%04X], A\n", addr);
 			break;
-		case 0xF0: // LDH A, [n]
+		case 0xF0: // LDH A, [a8]
 			value = fetch(gb);
 			addr = bytesToWord(0xFF, value);	
 			gb->cpu.A = readMemory(gb, addr);
@@ -242,39 +409,28 @@ void executeInstruction(Gameboy* gb)
 			break;	
 		case 0x05: // DEC B
 			value = gb->cpu.B;
-			decRegister(gb, &gb->cpu.B);	
+			subRegister(gb, &gb->cpu.B, 1);	
 			
 			if (debug) printf("DEC B         (DEC $%02X)\n", value);
 			break;
 		case 0x0D: // DEC C
 			value = gb->cpu.C;
-			decRegister(gb, &gb->cpu.C);	
+			subRegister(gb, &gb->cpu.C, 1);
 			
 			if (debug) printf("DEC C         (DEC $%02X)\n", value);
 			break;
-		case 0x20: // JR NZ, e8
-			raddr = (int8_t)fetch(gb);
-				
-			if (!(gb->cpu.F & Z))
-			{
-				gb->cpu.PC += raddr;
-				gb->cpu.cycles += 10;
-			} else
-			{
-				gb->cpu.cycles += 6;
-			}
+		case 0x0B: // DEC BC
+			word = bytesToWord(gb->cpu.B, gb->cpu.C);
+			// Apparently we can just do this without setting any flags, according to gekko.fi'spseudocode
+			wordToBytes(&gb->cpu.B, &gb->cpu.B, word-1);
 
-			if (debug) printf("JR NZ, %d\n", raddr);
+			if (debug) printf("DEC BC         (DEC $%04X)\n", word);
 			break;
-		case 0xFE: // CP n8
-			value = fetch(gb);
-			uint8_t A = gb->cpu.A;
+		case 0x0C: // INC C
+			value = gb->cpu.C;
+			addRegister(gb, &gb->cpu.C, 1);
 
-			subRegister(gb, &gb->cpu.A, value);
-
-			gb->cpu.A = A;
-
-			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, A, value);
+			if (debug) printf("INC C         (INC $%02X)\n", value);
 			break;
 		case 0xF3: // DI
 			gb->cpu.IME = 0;
@@ -292,6 +448,7 @@ void executeInstruction(Gameboy* gb)
 void executePPUCycle(Gameboy* gb)
 {
 	// TODO: write out everything to a texture in the graphics struct
+	
 }
 
 void runGameboy(Gameboy* gb)
@@ -316,13 +473,14 @@ void runGameboy(Gameboy* gb)
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 	}
 
-	//updateGraphics(&gb->graphics);
-	//size_t executeAmountInstructions = (0x00FF * 3) * 0x40;
-	//for (size_t i = 0; i < executeAmountInstructions; i++)
-	//{
-	//	executeInstruction(gb);
-	//}
+	updateGraphics(&gb->graphics);
+	size_t executeAmountInstructions = 5000000;//(0x00FF * 3) * 0x40;
+	for (size_t i = 0; i < executeAmountInstructions; i++)
+	{
+		executeInstruction(gb);
+	}
 	
+	/*
 	while (!gb->graphics.shouldQuit)
 	{
 		executeInstruction(gb);
@@ -332,6 +490,7 @@ void runGameboy(Gameboy* gb)
 
 		sleepMs(MS_PER_CYCLE);
 	}
+	*/
 
 	if (debug)
 	{

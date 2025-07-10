@@ -3,7 +3,7 @@
 int main()
 {
 	Gameboy gb = {};
-	gb.flags = VERBOSE | DEBUG;
+	gb.flags = VERBOSE | DEBUG | GRAPHICS_DISABLED;
 
 	initGameboy(&gb, "testroms/tetris.gb");
 
