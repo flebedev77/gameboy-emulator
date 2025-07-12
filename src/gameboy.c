@@ -132,6 +132,14 @@ uint16_t popStackWord(Gameboy* gb)
 	return bytesToWord(hb, lb);
 }
 
+void setZeroflag(Gameboy* gb, uint8_t value)
+{
+	if (value == 0)
+		gb->cpu.F |= Z;
+	else
+		gb->cpu.F &= ~Z;
+}
+
 void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 {
 	uint16_t result = (uint16_t)*reg + (uint16_t)value; 
@@ -143,12 +151,9 @@ void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 	for (int i = 0; i < 8; i++) {
 		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) < 0 ? 1 : 0;
 	}
-
-	if (result == 0)
-		gb->cpu.F |= Z;
-	else
-		gb->cpu.F &= ~Z;
-
+	
+	setZeroflag(gb, result);
+	
 	gb->cpu.F |= N;
 
 	if (carryPerBit[3])
@@ -174,10 +179,7 @@ void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 		carryPerBit[i] = ((*reg >> i) & 1) - ((value >> i) & 1) < 0 ? 1 : 0;
 	}
 
-	if (result == 0)
-		gb->cpu.F |= Z;
-	else
-		gb->cpu.F &= ~Z;
+	setZeroflag(gb, result);
 
 	gb->cpu.F |= N;
 
@@ -311,11 +313,21 @@ void executeInstruction(Gameboy* gb)
 			gb->cpu.cycles += 3;	
 			if (debug) printf("XOR A, A\n");
 			break;
-		case 0xB1: //OR A, C
+		case 0xB1: // OR A, C
 			value = gb->cpu.A;
 			orRegister(gb, &gb->cpu.C);
 
 			if (debug) printf("OR A, C         (OR $%02X $%02X)\n", value, gb->cpu.C);
+			break;
+		case 0xE6: // AND A, n8
+			value = fetch(gb);
+			gb->cpu.A = gb->cpu.A & value;
+
+			setZeroflag(gb, gb->cpu.A);
+			gb->cpu.F |= H;
+			gb->cpu.F &= ~(N | C);
+			
+			if (debug) printf("AND A, %02X\n", value);
 			break;
 		case 0x3E: // LDA n8
 			value = fetch(gb);	
@@ -432,11 +444,23 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("INC C         (INC $%02X)\n", value);
 			break;
+		case 0x2F: // CPL
+			gb->cpu.A = ~gb->cpu.A;
+			gb->cpu.F |= (Z | H);
+
+			if (debug) printf("CPL           (CPL $%02X)\n", gb->cpu.A);
+			break;
 		case 0xF3: // DI
 			gb->cpu.IME = 0;
 			gb->cpu.cycles += 3;
 
 			if (debug) printf("DI\n");
+			break;
+		case 0xFB: // EI
+			gb->cpu.IME = 1;
+			gb->cpu.cycles += 2;
+			
+			if (debug) printf("EI\n");
 			break;
 
 		default:
