@@ -105,11 +105,21 @@ void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
 
 void writeMemory(Gameboy* gb, uint16_t addr, uint8_t value)
 {
+	if (addr < 0x0 || addr > 0xFFFF)
+	{
+		printf("ERROR: Program tried writing memory out of bounds ($0000 - $FFFF)\n");
+		return 0x0;
+	}
 	gb->memory[addr] = value;
 	gb->cpu.cycles++;	
 }
 uint8_t readMemory(Gameboy* gb, uint16_t addr)
 {
+	if (addr < 0x0 || addr > 0xFFFF)
+	{
+		printf("ERROR: Program tried reading memory out of bounds ($0000 - $FFFF)\n");
+		return 0x0;
+	}
 	gb->cpu.cycles++;
 	return gb->memory[addr];
 }
