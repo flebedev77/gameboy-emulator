@@ -81,6 +81,17 @@ void performDump(Gameboy* gb)
 	writeFile(CPU_DUMPFILENAME, (uint8_t*)buf, 0x5F); // My dumbass can't calculate the length of a string properly
 }
 
+void seperateNibbles(uint8_t* H, uint8_t* L, uint8_t value)
+{
+	*L = value & 0x0F;
+	*H = (value & 0xF0) >> 4;
+}
+
+uint8_t constructNibblesByte(uint8_t H, uint8_t L)
+{
+	return (H << 4) + L;
+}
+
 uint16_t bytesToWord(uint8_t H, uint8_t L)
 {
 	return (H << 8) + L;
@@ -206,6 +217,14 @@ void orRegister(Gameboy* gb, uint8_t* reg)
 	gb->cpu.F &= ~(N | H | C);
 }
 
+void swapNibblesRegister(uint8_t *reg)
+{
+	uint8_t H, L;
+	seperateNibbles(&H, &L, *reg);		
+
+	*reg = constructNibblesByte(L, H); // We swapping nibbles here
+}
+
 uint8_t fetch(Gameboy* gb)
 {
 	uint8_t byte = gb->memory[gb->cpu.PC];
@@ -319,6 +338,12 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("OR A, C         (OR $%02X $%02X)\n", value, gb->cpu.C);
 			break;
+		case 0xB0: // OR A, B
+			value = gb->cpu.A;
+			orRegister(gb, &gb->cpu.B);
+
+			if (debug) printf("OR A, B         (OR $%02X $%02X)\n", value, gb->cpu.B);
+			break;
 		case 0xE6: // AND A, n8
 			value = fetch(gb);
 			gb->cpu.A = gb->cpu.A & value;
@@ -339,8 +364,18 @@ void executeInstruction(Gameboy* gb)
 		case 0x78: // LD A, B
 			gb->cpu.A = gb->cpu.B;
 
-			if (debug) printf("LD A, B         (LDA $%02X)\n", gb->cpu.B);
+			if (debug) printf("LD A, B         (LDA $%02X)\n", gb->cpu.A);
 			break;	
+		case 0x47: // LD B, A
+			gb->cpu.B = gb->cpu.A
+
+			if (debug) printf("LD B, A         (LDB $%02X)\n", gb->cpu.A);
+			break;
+		case 0x4F: // LD C, A
+			gb->cpu.C = gb->cpu.A
+
+			if (debug) printf("LD C, A         (LDC $%02X)\n", gb->cpu.A);
+			break;
 		case 0x21: // LD HL, n16
 			word = fetchWord(gb);
 			wordToBytes(&gb->cpu.H, &gb->cpu.L, word);
@@ -450,6 +485,22 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("CPL           (CPL $%02X)\n", gb->cpu.A);
 			break;
+		case 0xCB: // Prefix for bitwise instructions
+			uint8_t bitwiseOpcode = fetch(gb);
+
+			switch(bitwiseOpcode)
+			{
+				case 0x37: // SWAP A
+					value = gb->cpu.A;
+					swapNibblesRegister(&gb->cpu.A);	
+					if (debug) printf("SWAPA $%02X       (SWAPA $%02X)\n", value, gb->cpu.A);
+					break;
+				default:
+					if (debug) printf("Error! Second opcode not found after $CB prefix: $%02X\n", bitwiseOpcode);
+					break;
+			}	
+
+			break;	
 		case 0xF3: // DI
 			gb->cpu.IME = 0;
 			gb->cpu.cycles += 3;
