@@ -10,7 +10,6 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 
 	gb->flags |= INITED;
 
-
 	if (!(gb->flags & GRAPHICS_DISABLED))
 	{
 		memset(&gb->graphics, 0, sizeof(Graphics));
@@ -105,6 +104,7 @@ void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
 
 void writeMemory(Gameboy* gb, uint16_t addr, uint8_t value)
 {
+	//This won't buffer overflow / underflow, because uint16_t is cannot be larger or smaller than 0 and FFFF
 	gb->memory[addr] = value;
 	gb->cpu.cycles++;	
 }
@@ -151,6 +151,32 @@ void setZeroflag(Gameboy* gb, uint8_t value)
 		gb->cpu.F &= ~Z;
 }
 
+void addRegisterWord(Gameboy* gb, uint16_t* reg, uint16_t value)
+{
+	uint32_t result = (uint32_t)*reg + (uint32_t)value; 
+	uint16_t carryPerBit[16]; 
+
+	*reg = (uint16_t)result;
+
+	for (int i = 0; i < 16; i++) {
+		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) < 0 ? 1 : 0;
+	}
+
+	setZeroflag(gb, (uint8_t)result);
+
+	gb->cpu.F |= N;
+
+	if (carryPerBit[11])
+		gb->cpu.F |= H;
+	else 
+		gb->cpu.F &= ~H;
+
+	if (carryPerBit[15])
+		gb->cpu.F |= C;
+	else
+		gb->cpu.F &= ~C;	
+}
+
 void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 {
 	uint16_t result = (uint16_t)*reg + (uint16_t)value; 
@@ -158,13 +184,13 @@ void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 
 	*reg = (uint8_t)result;
 
-	
+
 	for (int i = 0; i < 8; i++) {
 		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) < 0 ? 1 : 0;
 	}
-	
+
 	setZeroflag(gb, result);
-	
+
 	gb->cpu.F |= N;
 
 	if (carryPerBit[3])
@@ -205,16 +231,35 @@ void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 		gb->cpu.F &= ~carryPerBit[7];	
 }
 
-void orRegister(Gameboy* gb, uint8_t* reg)
+void setOrFlags(Gameboy* gb)
 {
-	gb->cpu.A = gb->cpu.A | *reg;	
-
-	if (gb->cpu.A == 0)
-		gb->cpu.F |= Z;
-	else
-		gb->cpu.F &= ~Z;
-
+	setZeroflag(gb, gb->cpu.A);
 	gb->cpu.F &= ~(N | H | C);
+}
+
+void orRegister(Gameboy* gb, uint8_t reg)
+{
+	gb->cpu.A |= reg;	
+	setOrFlags(gb);	
+}
+
+void xorRegister(Gameboy* gb, uint8_t reg)
+{
+	gb->cpu.A ^= reg;
+	setOrFlags(gb);
+}
+
+void setAndFlags(Gameboy* gb)
+{
+	setZeroflag(gb, gb->cpu.A);
+	gb->cpu.F |= H;
+	gb->cpu.F &= ~(N | C);
+}
+
+void andRegister(Gameboy* gb, uint8_t reg)
+{
+	gb->cpu.A &= reg;
+	setAndFlags(gb);
 }
 
 void swapNibblesRegister(uint8_t *reg)
@@ -261,6 +306,7 @@ void executeInstruction(Gameboy* gb)
 	uint16_t word = 0x0000;
 	int8_t raddr = 0x00;
 	uint8_t value = 0x00;
+	uint16_t BC, DE, HL;
 
 	if (debug) printf(" %02X $%04X ", ins, gb->cpu.PC-1);
 
@@ -269,6 +315,7 @@ void executeInstruction(Gameboy* gb)
 		case 0x00: // NOP
 			if (debug) printf("NOP\n");
 			break;
+		//Logical
 		case 0xC3: // JP a16
 			addr = fetchWord(gb);
 			gb->cpu.PC = addr;
@@ -299,12 +346,19 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("CALL $%04X\n", addr);
 			break;
+		case 0xEF: // RST $28
+			pushStackWord(gb, gb->cpu.PC);
+			
+			gb->cpu.PC = 0x0028;
+
+			if (debug) printf("RST $28\n");
+			break;
 		case 0xC9: // RET
 			gb->cpu.PC = popStackWord(gb);
 
 			if (debug) printf("RET        (JP $%04X)\n", gb->cpu.PC);
 			break;
-		case 0xE2: // POP HL
+		case 0xE1: // POP HL
 			wordToBytes(&gb->cpu.H, &gb->cpu.L, fetchWordStack(gb));	
 
 			if (debug) printf("POP HL        (HL=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.H, gb->cpu.L), gb->cpu.SP);
@@ -320,51 +374,48 @@ void executeInstruction(Gameboy* gb)
 			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, A, value);
 			break;
 		case 0xAF: // XOR A, A
-			gb->cpu.A ^= gb->cpu.A;
-
-			if (gb->cpu.A == 0)
-				gb->cpu.F |= Z;
-			else
-				gb->cpu.F &= ~Z;	
-
-			gb->cpu.F &= ~(N | H | C);
-
+			xorRegister(gb, gb->cpu.A);
+			
 			gb->cpu.cycles += 3;	
 			if (debug) printf("XOR A, A\n");
 			break;
+		case 0xA9: // XOR A, C
+			xorRegister(gb, gb->cpu.C);
+
+			if (debug) printf("XOR A, C\n");
+			break;
 		case 0xB1: // OR A, C
 			value = gb->cpu.A;
-			orRegister(gb, &gb->cpu.C);
+			orRegister(gb, gb->cpu.C);
 
 			if (debug) printf("OR A, C         (OR $%02X $%02X)\n", value, gb->cpu.C);
 			break;
 		case 0xB0: // OR A, B
 			value = gb->cpu.A;
-			orRegister(gb, &gb->cpu.B);
+			orRegister(gb, gb->cpu.B);
 
 			if (debug) printf("OR A, B         (OR $%02X $%02X)\n", value, gb->cpu.B);
 			break;
+		case 0xA1: // AND A, B
+			andRegister(gb, gb->cpu.B);	
+			if (debug) printf("AND A, B         (AND $%02X $%02X)\n", gb->cpu.A, gb->cpu.B);
+			break;
 		case 0xE6: // AND A, n8
 			value = fetch(gb);
-			gb->cpu.A = gb->cpu.A & value;
-
-			setZeroflag(gb, gb->cpu.A);
-			gb->cpu.F |= H;
-			gb->cpu.F &= ~(N | C);
-			
+			andRegister(gb, value);
+						
 			if (debug) printf("AND A, %02X\n", value);
 			break;
-		case 0x3E: // LDA n8
-			value = fetch(gb);	
-			gb->cpu.A = value;
-			gb->cpu.cycles += 7;
-
-			if (debug) printf("LDA $%02X\n", value);
-			break;
+		// Loading
 		case 0x78: // LD A, B
 			gb->cpu.A = gb->cpu.B;
 
 			if (debug) printf("LD A, B         (LDA $%02X)\n", gb->cpu.A);
+			break;	
+		case 0x79: // LD A, C
+			gb->cpu.A = gb->cpu.C;
+
+			if (debug) printf("LD A, C          (LDA $%02X)\n", gb->cpu.A);	
 			break;	
 		case 0x47: // LD B, A
 			gb->cpu.B = gb->cpu.A;
@@ -376,6 +427,16 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("LD C, A         (LDC $%02X)\n", gb->cpu.A);
 			break;
+		case 0x5F: // LD E, A
+			gb->cpu.E = gb->cpu.A;
+
+			if (debug) printf("LD E, A         (LDE $%02X)\n", gb->cpu.A);
+			break;
+    case 0x5E: // LD E, [HL]
+      gb->cpu.E = readMemory(gb, bytesToWord(gb->cpu.H, gb->cpu.L));
+
+      if (debug) printf("LD E, [HL]         (LDE $%02X)\n", gb->cpu.E);
+      break;
 		case 0x21: // LD HL, n16
 			word = fetchWord(gb);
 			wordToBytes(&gb->cpu.H, &gb->cpu.L, word);
@@ -396,6 +457,19 @@ void executeInstruction(Gameboy* gb)
 
 			gb->cpu.cycles += 6;
 			if (debug) printf("LDB $%02X\n", value);
+			break;
+		case 0x3E: // LDA n8
+			value = fetch(gb);	
+			gb->cpu.A = value;
+			gb->cpu.cycles += 7;
+
+			if (debug) printf("LDA $%02X\n", value);
+			break;
+		case 0x16: // LDD n8
+			value = fetch(gb);
+			gb->cpu.D = value;
+
+			if (debug) printf("LDD $%02X\n", value);
 			break;
 		case 0x01: // LD BC, n16
 			word = fetchWord(gb);
@@ -454,6 +528,13 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("LDH A, [$%04X]\n", addr);
 			break;	
+		case 0xE2: // LDH [C], A
+			addr = bytesToWord(0xFF, gb->cpu.C);
+			writeMemory(gb, addr, gb->cpu.A);
+
+			if (debug) printf("LDH [$%04X], A (LDH [$%04X], $%02X)\n", addr, addr, gb->cpu.A);
+			break;
+		//Arithmetic
 		case 0x05: // DEC B
 			value = gb->cpu.B;
 			subRegister(gb, &gb->cpu.B, 1);	
@@ -479,11 +560,28 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("INC C         (INC $%02X)\n", value);
 			break;
+		case 0x87: // ADD A, A
+			addRegister(gb, &gb->cpu.A, gb->cpu.A);	
+
+			if (debug) printf("ADD $%02X $%02X\n", gb->cpu.A, gb->cpu.A);
+			break;
+		case 0x19: // ADD HL, DE
+			HL = bytesToWord(gb->cpu.H, gb->cpu.L);
+			DE = bytesToWord(gb->cpu.D, gb->cpu.E);
+      BC = HL;
+
+      addRegisterWord(gb, &HL, DE);
+      
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, HL); 
+			
+			if (debug) printf("ADD HL, DE     (ADD $%04X $%04X = $%04X)\n", BC, DE, HL);
+			break;
 		case 0x2F: // CPL
+      value = gb->cpu.A;
 			gb->cpu.A = ~gb->cpu.A;
 			gb->cpu.F |= (Z | H);
 
-			if (debug) printf("CPL           (CPL $%02X)\n", gb->cpu.A);
+			if (debug) printf("CPL           (CPL $%02X)\n", value);
 			break;
 		case 0xCB: // Prefix for bitwise instructions
 			uint8_t bitwiseOpcode = fetch(gb);
@@ -549,7 +647,7 @@ void runGameboy(Gameboy* gb)
 	}
 
 	updateGraphics(&gb->graphics);
-	size_t executeAmountInstructions = 5000000;//(0x00FF * 3) * 0x40;
+	size_t executeAmountInstructions = 70000;//(0x00FF * 3) * 0x40;
 	for (size_t i = 0; i < executeAmountInstructions; i++)
 	{
 		executeInstruction(gb);
