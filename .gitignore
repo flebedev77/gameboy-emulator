@@ -3,7 +3,7 @@ build/*
 testroms/
 testroms/*
 *.o
-*.swp
+*.sw*
 *.bin
 *.gb
 *.log

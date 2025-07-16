@@ -6,6 +6,7 @@
 #include <string.h>
 #include "util.h"
 #include "graphics.h"
+#include "hardwareinc.h"
 
 #define SCREEN_WIDTH 160
 #define SCREEN_HEIGHT 144

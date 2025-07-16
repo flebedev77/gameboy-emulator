@@ -44,7 +44,7 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
-	gb->memory[0xFF44] = 148; // Gaslight the program into thinking we in vblank
+	gb->memory[rLY] = 148; // Gaslight the program into thinking we in vblank
 
 	if (verbose)
 		printf("Copying rom (%ld bytes) into memory map (%d bytes)\n", gb->rom.len, MEMORY_SIZE);
@@ -278,22 +278,9 @@ uint8_t fetch(Gameboy* gb)
 	return byte;
 }
 
-uint8_t fetchStack(Gameboy* gb)
-{
-	uint8_t byte = gb->memory[gb->cpu.SP];
-	gb->cpu.SP--;
-	gb->cpu.cycles++;
-	return byte;
-}
-
 uint16_t fetchWord(Gameboy* gb)
 { // fetches two bytes, swaps them around and adds them
 	return bytesToWord(fetch(gb), fetch(gb));
-}
-
-uint16_t fetchWordStack(Gameboy* gb)
-{
-	return bytesToWord(fetchStack(gb), fetchStack(gb));
 }
 
 void executeInstruction(Gameboy* gb)
@@ -323,6 +310,12 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("JP  $%04X\n", addr);
 			break;
+    case 0xE9: // JP HL
+      HL = bytesToWord(gb->cpu.H, gb->cpu.L);
+      gb->cpu.PC = HL;
+
+      if (debug) printf("JP  $%04X\n", HL);
+      break;
 		case 0x20: // JR NZ, e8
 			raddr = (int8_t)fetch(gb);
 				
@@ -359,10 +352,16 @@ void executeInstruction(Gameboy* gb)
 			if (debug) printf("RET        (JP $%04X)\n", gb->cpu.PC);
 			break;
 		case 0xE1: // POP HL
-			wordToBytes(&gb->cpu.H, &gb->cpu.L, fetchWordStack(gb));	
+			wordToBytes(&gb->cpu.H, &gb->cpu.L, popStackWord(gb));	
 
 			if (debug) printf("POP HL        (HL=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.H, gb->cpu.L), gb->cpu.SP);
 			break;
+    case 0xD5: // PUSH DE
+      DE = bytesToWord(gb->cpu.D, gb->cpu.E);
+      pushStackWord(gb, DE);
+
+      if (debug) printf("PUSH DE        (DE=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.D, gb->cpu.E), gb->cpu.SP);
+      break;
 		case 0xFE: // CP n8
 			value = fetch(gb);
 			uint8_t A = gb->cpu.A;
@@ -371,7 +370,7 @@ void executeInstruction(Gameboy* gb)
 
 			gb->cpu.A = A;
 
-			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, A, value);
+			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, value, A);
 			break;
 		case 0xAF: // XOR A, A
 			xorRegister(gb, gb->cpu.A);
@@ -404,7 +403,7 @@ void executeInstruction(Gameboy* gb)
 			value = fetch(gb);
 			andRegister(gb, value);
 						
-			if (debug) printf("AND A, %02X\n", value);
+			if (debug) printf("AND A, $%02X\n", value);
 			break;
 		// Loading
 		case 0x78: // LD A, B
@@ -436,6 +435,11 @@ void executeInstruction(Gameboy* gb)
       gb->cpu.E = readMemory(gb, bytesToWord(gb->cpu.H, gb->cpu.L));
 
       if (debug) printf("LD E, [HL]         (LDE $%02X)\n", gb->cpu.E);
+      break;
+    case 0x56: // LD D, [HL]
+      gb->cpu.D = readMemory(gb, bytesToWord(gb->cpu.H, gb->cpu.L));
+
+      if (debug) printf("LD D, [HL]         (LDD $%02X)\n", gb->cpu.D);
       break;
 		case 0x21: // LD HL, n16
 			word = fetchWord(gb);
@@ -560,10 +564,17 @@ void executeInstruction(Gameboy* gb)
 
 			if (debug) printf("INC C         (INC $%02X)\n", value);
 			break;
+    case 0x23: // INC HL
+      HL = bytesToWord(gb->cpu.H, gb->cpu.L);
+      addRegisterWord(gb, &HL, 1);
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, HL);
+
+      if (debug) printf("INC HL         (INC $%02X)\n", HL);
+      break;
 		case 0x87: // ADD A, A
 			addRegister(gb, &gb->cpu.A, gb->cpu.A);	
 
-			if (debug) printf("ADD $%02X $%02X\n", gb->cpu.A, gb->cpu.A);
+			if (debug) printf("ADD A, A    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.A);
 			break;
 		case 0x19: // ADD HL, DE
 			HL = bytesToWord(gb->cpu.H, gb->cpu.L);
@@ -593,6 +604,11 @@ void executeInstruction(Gameboy* gb)
 					swapNibblesRegister(&gb->cpu.A);	
 					if (debug) printf("SWAPA $%02X       (SWAPA $%02X)\n", value, gb->cpu.A);
 					break;
+        case 0x87: // RES 0, A
+          value = gb->cpu.A;
+          gb->cpu.A &= 0b11111110;
+          if (debug) printf("RES 0, A     (RES 0, $%02X  =  $%02X)\n", value, gb->cpu.A);
+          break;
 				default:
 					if (debug) printf("Error! Second opcode not found after $CB prefix: $%02X\n", bitwiseOpcode);
 					break;
@@ -621,7 +637,14 @@ void executeInstruction(Gameboy* gb)
 void executePPUCycle(Gameboy* gb)
 {
 	// TODO: write out everything to a texture in the graphics struct
-	
+  
+  // TODO: copy stuff out of vram into the texture
+  gb->memory[rLY]++;
+
+  if (gb->memory[rLY] > 153)
+  {
+    gb->memory[rLY] = 0;
+  }
 }
 
 void runGameboy(Gameboy* gb)
@@ -651,6 +674,7 @@ void runGameboy(Gameboy* gb)
 	for (size_t i = 0; i < executeAmountInstructions; i++)
 	{
 		executeInstruction(gb);
+    executePPUCycle(gb);
 	}
 	
 	/*
