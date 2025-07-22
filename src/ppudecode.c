@@ -23,11 +23,11 @@ void printPixelPallettes(uint8_t* tileData, size_t tileAmount)
     // 64 total pixels in a tile, 16 bytes
     uint8_t outputPallette[64];
 
-    printf("  Parsing tile\n");
+    printf("  Parsing tile %d\n", tileIndex);
 
     for (size_t tileByte = 0; tileByte < 16; tileByte += 2)
     {
-      size_t byteIndex = tileIndex + tileByte;
+      size_t byteIndex = (tileIndex * 16) + tileByte;
       // processing the entire tile here
       uint16_t line = 0;
       uint8_t pixels[8]; // the pixels in the current line containing two bits
@@ -44,22 +44,22 @@ void printPixelPallettes(uint8_t* tileData, size_t tileAmount)
 
       for (size_t bit = 0; bit < 8; bit++)
       {
-        outputPallette[(tileByte/2) * 8 + bit] = pixels[bit];
+        outputPallette[(tileByte / 2) * 8 + bit] = pixels[bit];
         printTileBit(pixels[bit]);
       }
       printf("\n");
     }
 
-    printf("\n");
-    printf(" Output pallete\n");
-    for (size_t y = 0; y < 8; y++)
-    {
-      for (size_t x = 0; x < 8; x++)
-      {
-        printTileBit(outputPallette[y * 8 + x]);
-      }
-      printf("\n");
-    }
+    // printf("\n");
+    // printf(" Output pallete\n");
+    // for (size_t y = 0; y < 8; y++)
+    // {
+    //   for (size_t x = 0; x < 8; x++)
+    //   {
+    //     printTileBit(outputPallette[y * 8 + x]);
+    //   }
+    //   printf("\n");
+    // }
 
   }
 }
