@@ -44,7 +44,7 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
-	gb->memory[rLY] = 148; // Gaslight the program into thinking we in vblank
+	gb->memory[rLY] = 0x8F; // Gaslight the program into thinking we in vblank
 
 	if (verbose)
 		printf("Copying rom (%ld bytes) into memory map (%d bytes)\n", gb->rom.len, MEMORY_SIZE);
@@ -299,138 +299,155 @@ void executeInstruction(Gameboy* gb)
 
 	switch(ins)
 	{
-		case 0x00: // NOP
-			if (debug) printf("NOP\n");
-			break;
-		//Logical
-		case 0xC3: // JP a16
-			addr = fetchWord(gb);
-			gb->cpu.PC = addr;
-			gb->cpu.cycles += 13;
+    case 0x00: // NOP
+      if (debug) printf("NOP\n");
+      break;
+      //Logical
+    case 0xC3: // JP a16
+      addr = fetchWord(gb);
+      gb->cpu.PC = addr;
+      gb->cpu.cycles += 13;
 
-			if (debug) printf("JP  $%04X\n", addr);
-			break;
+      if (debug) printf("JP  $%04X\n", addr);
+      break;
     case 0xE9: // JP HL
       HL = bytesToWord(gb->cpu.H, gb->cpu.L);
       gb->cpu.PC = HL;
 
       if (debug) printf("JP  $%04X\n", HL);
       break;
-		case 0x20: // JR NZ, e8
-			raddr = (int8_t)fetch(gb);
-				
-			if (!(gb->cpu.F & Z))
-			{
-				gb->cpu.PC += raddr;
-				gb->cpu.cycles += 10;
-			} else
-			{
-				gb->cpu.cycles += 6;
-			}
+    case 0x20: // JR NZ, e8
+      raddr = (int8_t)fetch(gb);
 
-			if (debug) printf("JR NZ, %d\n", raddr);
-			break;
-		case 0xCD: // CALL a16
-			addr = fetchWord(gb);
-			
-			pushStackWord(gb, gb->cpu.PC);	
+      if (!(gb->cpu.F & Z))
+      {
+        gb->cpu.PC += raddr;
+        gb->cpu.cycles += 10;
+      } else
+      {
+        gb->cpu.cycles += 6;
+      }
 
-			gb->cpu.PC = addr;
+      if (debug) printf("JR NZ, %d\n", raddr);
+      break;
+    case 0xC2: // JP NZ, a16
+      addr = fetchWord(gb);
 
-			if (debug) printf("CALL $%04X\n", addr);
-			break;
-		case 0xEF: // RST $28
-			pushStackWord(gb, gb->cpu.PC);
-			
-			gb->cpu.PC = 0x0028;
+      if (!(gb->cpu.F & Z))
+        gb->cpu.PC = addr;
 
-			if (debug) printf("RST $28\n");
-			break;
-		case 0xC9: // RET
-			gb->cpu.PC = popStackWord(gb);
+      if (debug) printf("JP NZ, $%04X\n", addr);
+      break;
+    case 0xDA: // JP C, a16
+      addr = fetchWord(gb);
 
-			if (debug) printf("RET        (JP $%04X)\n", gb->cpu.PC);
-			break;
-		case 0xE1: // POP HL
-			wordToBytes(&gb->cpu.H, &gb->cpu.L, popStackWord(gb));	
+      if (!(gb->cpu.F & Z))
+      {
+        gb->cpu.PC = addr;
+      }
+      if (debug) printf("JP C, $%04X\n", addr);
+      break;
+    case 0xCD: // CALL a16
+      addr = fetchWord(gb);
 
-			if (debug) printf("POP HL        (HL=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.H, gb->cpu.L), gb->cpu.SP);
-			break;
+      pushStackWord(gb, gb->cpu.PC);	
+
+      gb->cpu.PC = addr;
+
+      if (debug) printf("CALL $%04X\n", addr);
+      break;
+    case 0xEF: // RST $28
+      pushStackWord(gb, gb->cpu.PC);
+
+      gb->cpu.PC = 0x0028;
+
+      if (debug) printf("RST $28\n");
+      break;
+    case 0xC9: // RET
+      gb->cpu.PC = popStackWord(gb);
+
+      if (debug) printf("RET        (JP $%04X)\n", gb->cpu.PC);
+      break;
+    case 0xE1: // POP HL
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, popStackWord(gb));	
+
+      if (debug) printf("POP HL        (HL=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.H, gb->cpu.L), gb->cpu.SP);
+      break;
     case 0xD5: // PUSH DE
       DE = bytesToWord(gb->cpu.D, gb->cpu.E);
       pushStackWord(gb, DE);
 
       if (debug) printf("PUSH DE        (DE=$%04X,SP=$%04X)\n", bytesToWord(gb->cpu.D, gb->cpu.E), gb->cpu.SP);
       break;
-		case 0xFE: // CP n8
-			value = fetch(gb);
-			uint8_t A = gb->cpu.A;
+    case 0xFE: // CP n8
+      value = fetch(gb);
+      uint8_t A = gb->cpu.A;
 
-			subRegister(gb, &gb->cpu.A, value);
+      subRegister(gb, &gb->cpu.A, value);
 
-			gb->cpu.A = A;
+      gb->cpu.A = A;
 
-			if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, value, A);
-			break;
-		case 0xAF: // XOR A, A
-			xorRegister(gb, gb->cpu.A);
-			
-			gb->cpu.cycles += 3;	
-			if (debug) printf("XOR A, A\n");
-			break;
-		case 0xA9: // XOR A, C
-			xorRegister(gb, gb->cpu.C);
+      if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, value, A);
+      break;
+    case 0xAF: // XOR A, A
+      xorRegister(gb, gb->cpu.A);
 
-			if (debug) printf("XOR A, C\n");
-			break;
-		case 0xB1: // OR A, C
-			value = gb->cpu.A;
-			orRegister(gb, gb->cpu.C);
+      gb->cpu.cycles += 3;	
+      if (debug) printf("XOR A, A\n");
+      break;
+    case 0xA9: // XOR A, C
+      xorRegister(gb, gb->cpu.C);
 
-			if (debug) printf("OR A, C         (OR $%02X $%02X)\n", value, gb->cpu.C);
-			break;
-		case 0xB0: // OR A, B
-			value = gb->cpu.A;
-			orRegister(gb, gb->cpu.B);
+      if (debug) printf("XOR A, C\n");
+      break;
+    case 0xB1: // OR A, C
+      value = gb->cpu.A;
+      orRegister(gb, gb->cpu.C);
 
-			if (debug) printf("OR A, B         (OR $%02X $%02X)\n", value, gb->cpu.B);
-			break;
-		case 0xA1: // AND A, B
-			andRegister(gb, gb->cpu.B);	
-			if (debug) printf("AND A, B         (AND $%02X $%02X)\n", gb->cpu.A, gb->cpu.B);
-			break;
-		case 0xE6: // AND A, n8
-			value = fetch(gb);
-			andRegister(gb, value);
-						
-			if (debug) printf("AND A, $%02X\n", value);
-			break;
-		// Loading
-		case 0x78: // LD A, B
-			gb->cpu.A = gb->cpu.B;
+      if (debug) printf("OR A, C         (OR $%02X $%02X)\n", value, gb->cpu.C);
+      break;
+    case 0xB0: // OR A, B
+      value = gb->cpu.A;
+      orRegister(gb, gb->cpu.B);
 
-			if (debug) printf("LD A, B         (LDA $%02X)\n", gb->cpu.A);
-			break;	
-		case 0x79: // LD A, C
-			gb->cpu.A = gb->cpu.C;
+      if (debug) printf("OR A, B         (OR $%02X $%02X)\n", value, gb->cpu.B);
+      break;
+    case 0xA1: // AND A, B
+      andRegister(gb, gb->cpu.B);	
+      if (debug) printf("AND A, B         (AND $%02X $%02X)\n", gb->cpu.A, gb->cpu.B);
+      break;
+    case 0xE6: // AND A, n8
+      value = fetch(gb);
+      andRegister(gb, value);
 
-			if (debug) printf("LD A, C          (LDA $%02X)\n", gb->cpu.A);	
-			break;	
-		case 0x47: // LD B, A
-			gb->cpu.B = gb->cpu.A;
+      if (debug) printf("AND A, $%02X\n", value);
+      break;
+      // Loading
+    case 0x78: // LD A, B
+      gb->cpu.A = gb->cpu.B;
 
-			if (debug) printf("LD B, A         (LDB $%02X)\n", gb->cpu.A);
-			break;
-		case 0x4F: // LD C, A
-			gb->cpu.C = gb->cpu.A;
+      if (debug) printf("LD A, B         (LDA $%02X)\n", gb->cpu.A);
+      break;	
+    case 0x79: // LD A, C
+      gb->cpu.A = gb->cpu.C;
 
-			if (debug) printf("LD C, A         (LDC $%02X)\n", gb->cpu.A);
-			break;
-		case 0x5F: // LD E, A
-			gb->cpu.E = gb->cpu.A;
+      if (debug) printf("LD A, C          (LDA $%02X)\n", gb->cpu.A);	
+      break;	
+    case 0x47: // LD B, A
+      gb->cpu.B = gb->cpu.A;
 
-			if (debug) printf("LD E, A         (LDE $%02X)\n", gb->cpu.A);
-			break;
+      if (debug) printf("LD B, A         (LDB $%02X)\n", gb->cpu.A);
+      break;
+    case 0x4F: // LD C, A
+      gb->cpu.C = gb->cpu.A;
+
+      if (debug) printf("LD C, A         (LDC $%02X)\n", gb->cpu.A);
+      break;
+    case 0x5F: // LD E, A
+      gb->cpu.E = gb->cpu.A;
+
+      if (debug) printf("LD E, A         (LDE $%02X)\n", gb->cpu.A);
+      break;
     case 0x5E: // LD E, [HL]
       gb->cpu.E = readMemory(gb, bytesToWord(gb->cpu.H, gb->cpu.L));
 
@@ -441,129 +458,173 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("LD D, [HL]         (LDD $%02X)\n", gb->cpu.D);
       break;
-		case 0x21: // LD HL, n16
-			word = fetchWord(gb);
-			wordToBytes(&gb->cpu.H, &gb->cpu.L, word);
+    case 0x11: // LD DE, n16
+      word = fetchWord(gb);
+      wordToBytes(&gb->cpu.D, &gb->cpu.E, word);
 
-			gb->cpu.cycles += 9; // 1 is used to read the op code, two are used to read the word. This instruction is meant to take 12 cycles
-			if (debug) printf("LD HL, $%04X\n", word);
-			break;
-		case 0x0E: // LDC n8
-			value = fetch(gb);
-			gb->cpu.C = value;
+      if (debug) printf("LD DE, $%04X\n", word);
+      break;
+    case 0x21: // LD HL, n16
+      word = fetchWord(gb);
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, word);
 
-			gb->cpu.cycles += 6;
-			if (debug) printf("LDC $%02X\n", value);
-			break;
-		case 0x06: // LDB n8
-			value = fetch(gb);
-			gb->cpu.B = value;
+      gb->cpu.cycles += 9; // 1 is used to read the op code, two are used to read the word. This instruction is meant to take 12 cycles
+      if (debug) printf("LD HL, $%04X\n", word);
+      break;
+    case 0x0E: // LDC n8
+      value = fetch(gb);
+      gb->cpu.C = value;
 
-			gb->cpu.cycles += 6;
-			if (debug) printf("LDB $%02X\n", value);
-			break;
-		case 0x3E: // LDA n8
-			value = fetch(gb);	
-			gb->cpu.A = value;
-			gb->cpu.cycles += 7;
+      gb->cpu.cycles += 6;
+      if (debug) printf("LDC $%02X\n", value);
+      break;
+    case 0x06: // LDB n8
+      value = fetch(gb);
+      gb->cpu.B = value;
 
-			if (debug) printf("LDA $%02X\n", value);
-			break;
-		case 0x16: // LDD n8
-			value = fetch(gb);
-			gb->cpu.D = value;
+      gb->cpu.cycles += 6;
+      if (debug) printf("LDB $%02X\n", value);
+      break;
+    case 0x3E: // LDA n8
+      value = fetch(gb);	
+      gb->cpu.A = value;
+      gb->cpu.cycles += 7;
 
-			if (debug) printf("LDD $%02X\n", value);
-			break;
-		case 0x01: // LD BC, n16
-			word = fetchWord(gb);
-			wordToBytes(&gb->cpu.B, &gb->cpu.C, word);
+      if (debug) printf("LDA $%02X\n", value);
+      break;
+    case 0x16: // LDD n8
+      value = fetch(gb);
+      gb->cpu.D = value;
 
-			if (debug) printf("LD BC, $%04X\n", word);
-			break;
-		case 0x32: // LD [HL-], A
-			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
-			writeMemory(gb, addr, gb->cpu.A);
+      if (debug) printf("LDD $%02X\n", value);
+      break;
+    case 0x01: // LD BC, n16
+      word = fetchWord(gb);
+      wordToBytes(&gb->cpu.B, &gb->cpu.C, word);
 
-			wordToBytes(&gb->cpu.H, &gb->cpu.L, addr-1); 
+      if (debug) printf("LD BC, $%04X\n", word);
+      break;
+    case 0x32: // LD [HL-], A
+      addr = bytesToWord(gb->cpu.H, gb->cpu.L);
+      writeMemory(gb, addr, gb->cpu.A);
 
-			gb->cpu.cycles += 6;	
-			if (debug) printf("LD [HL-], A   (LD $%04X, $%02X)\n", addr, gb->cpu.A);
-			break;
-		case 0x2A: // LD A, [HL+]
-			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
-			gb->cpu.A = readMemory(gb, addr);
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, addr-1); 
 
-			wordToBytes(&gb->cpu.H, &gb->cpu.L, addr+1);
+      gb->cpu.cycles += 6;	
+      if (debug) printf("LD [HL-], A   (LD $%04X, $%02X)\n", addr, gb->cpu.A);
+      break;
+    case 0x2A: // LD A, [HL+]
+      addr = bytesToWord(gb->cpu.H, gb->cpu.L);
+      gb->cpu.A = readMemory(gb, addr);
 
-			if (debug) printf("LD A, [HL+]   (LDA $%02X)\n", gb->cpu.A);
-			break;
-		case 0x36: // LD [HL], n8
-			value = fetch(gb);
-			addr = bytesToWord(gb->cpu.H, gb->cpu.L);
-			writeMemory(gb, addr, value);
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, addr+1);
 
-			gb->cpu.cycles += 2;
-			if (debug) printf("LD [HL], $%02X  (LD $%04X, $%02X)\n", value, addr, value);
-			break;
-		case 0xEA: // LD [a16], A
-			addr = fetchWord(gb);
-			writeMemory(gb, addr, gb->cpu.A);
+      if (debug) printf("LD A, [HL+]   (LDA $%02X)\n", gb->cpu.A);
+      break;
+    case 0x22: // LD [HL+], A
+      HL = bytesToWord(gb->cpu.H, gb->cpu.L);
+      writeMemory(gb, HL, gb->cpu.A);
 
-			if (debug) printf("LD [$%04X], A (LD $%04X, $%02X)\n", addr, addr, gb->cpu.A);
-			break;
-		case 0x31: // LD SP, n16
-			addr = fetchWord(gb);
-			gb->cpu.SP = addr;
-			gb->cpu.cycles += 3;
-			if (debug) printf("LD SP, $%04X\n", addr);
-			break;
-		case 0xE0: // LDH [a8], A
-			value = fetch(gb);	
-			addr = bytesToWord(0xFF, value);
-			writeMemory(gb, addr, gb->cpu.A);
-			
-			if (debug) printf("LDH [$%04X], A\n", addr);
-			break;
-		case 0xF0: // LDH A, [a8]
-			value = fetch(gb);
-			addr = bytesToWord(0xFF, value);	
-			gb->cpu.A = readMemory(gb, addr);
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, HL+1);
 
-			if (debug) printf("LDH A, [$%04X]\n", addr);
-			break;	
-		case 0xE2: // LDH [C], A
-			addr = bytesToWord(0xFF, gb->cpu.C);
-			writeMemory(gb, addr, gb->cpu.A);
+      if (debug) printf("LD [HL+], A   (LD [$%04X], $%02X)\n", HL, gb->cpu.A);
+      break;
+    case 0x36: // LD [HL], n8
+      value = fetch(gb);
+      addr = bytesToWord(gb->cpu.H, gb->cpu.L);
+      writeMemory(gb, addr, value);
 
-			if (debug) printf("LDH [$%04X], A (LDH [$%04X], $%02X)\n", addr, addr, gb->cpu.A);
-			break;
-		//Arithmetic
-		case 0x05: // DEC B
-			value = gb->cpu.B;
-			subRegister(gb, &gb->cpu.B, 1);	
-			
-			if (debug) printf("DEC B         (DEC $%02X)\n", value);
-			break;
-		case 0x0D: // DEC C
-			value = gb->cpu.C;
-			subRegister(gb, &gb->cpu.C, 1);
-			
-			if (debug) printf("DEC C         (DEC $%02X)\n", value);
-			break;
-		case 0x0B: // DEC BC
-			word = bytesToWord(gb->cpu.B, gb->cpu.C);
-			// Apparently we can just do this without setting any flags, according to gekko.fi'spseudocode
-			wordToBytes(&gb->cpu.B, &gb->cpu.B, word-1);
+      gb->cpu.cycles += 2;
+      if (debug) printf("LD [HL], $%02X  (LD $%04X, $%02X)\n", value, addr, value);
+      break;
+    case 0x12: // LD [DE], A
+      addr = bytesToWord(gb->cpu.D, gb->cpu.E);
+      writeMemory(gb, addr, gb->cpu.A);
 
-			if (debug) printf("DEC BC         (DEC $%04X)\n", word);
-			break;
-		case 0x0C: // INC C
-			value = gb->cpu.C;
-			addRegister(gb, &gb->cpu.C, 1);
+      if (debug) printf("LD [DE], $%02X  (LD $%04X, $%02X)\n", gb->cpu.A, addr, gb->cpu.A);
+      break;
+    case 0x1A: // LD A, [DE]
+      addr = bytesToWord(gb->cpu.D, gb->cpu.E);
+      gb->cpu.A = readMemory(gb, addr);
+      
+      if (debug) printf("LD A, [DE]  (LDA [$%04X])\n", addr);
+      break;
+    case 0xEA: // LD [a16], A
+      addr = fetchWord(gb);
+      writeMemory(gb, addr, gb->cpu.A);
 
-			if (debug) printf("INC C         (INC $%02X)\n", value);
-			break;
+      if (debug) printf("LD [$%04X], A (LD $%04X, $%02X)\n", addr, addr, gb->cpu.A);
+      break;
+    case 0xFA: // LD A, [a16]
+      addr = fetchWord(gb);
+      gb->cpu.A = readMemory(gb, addr);
+
+      if (debug) printf("LD A, [$%04X] (LDA $%02X)\n", addr, gb->cpu.A);
+      break;
+    case 0x31: // LD SP, n16
+      addr = fetchWord(gb);
+      gb->cpu.SP = addr;
+      gb->cpu.cycles += 3;
+      if (debug) printf("LD SP, $%04X\n", addr);
+      break;
+    case 0xE0: // LDH [a8], A
+      value = fetch(gb);	
+      addr = bytesToWord(0xFF, value);
+      writeMemory(gb, addr, gb->cpu.A);
+
+      if (debug) printf("LDH [$%04X], A\n", addr);
+      break;
+    case 0xF0: // LDH A, [a8]
+      value = fetch(gb);
+      addr = bytesToWord(0xFF, value);	
+      gb->cpu.A = readMemory(gb, addr);
+
+      if (debug) printf("LDH A, [$%04X]\n", addr);
+      break;	
+    case 0xE2: // LDH [C], A
+      addr = bytesToWord(0xFF, gb->cpu.C);
+      writeMemory(gb, addr, gb->cpu.A);
+
+      if (debug) printf("LDH [$%04X], A (LDH [$%04X], $%02X)\n", addr, addr, gb->cpu.A);
+      break;
+      //Arithmetic
+    case 0x05: // DEC B
+      value = gb->cpu.B;
+      subRegister(gb, &gb->cpu.B, 1);	
+
+      if (debug) printf("DEC B         (DEC $%02X)\n", value);
+      break;
+    case 0x0D: // DEC C
+      value = gb->cpu.C;
+      subRegister(gb, &gb->cpu.C, 1);
+
+      if (debug) printf("DEC C         (DEC $%02X)\n", value);
+      break;
+    case 0x0B: // DEC BC
+      word = bytesToWord(gb->cpu.B, gb->cpu.C);
+      // Apparently we can just do this without setting any flags, according to gekko.fi'spseudocode
+      wordToBytes(&gb->cpu.B, &gb->cpu.B, word-1);
+
+      if (debug) printf("DEC BC         (DEC $%04X)\n", word);
+      break;
+    case 0x3B: // DEC SP
+      word = gb->cpu.SP;
+      gb->cpu.SP--;
+
+      if (debug) printf("DEC BC         (DEC $%04X)\n", word);
+      break;
+    case 0x0C: // INC C
+      value = gb->cpu.C;
+      addRegister(gb, &gb->cpu.C, 1);
+
+      if (debug) printf("INC C         (INC $%02X)\n", value);
+      break;
+    case 0x3C: // INC A
+      value = gb->cpu.A;
+      addRegister(gb, &gb->cpu.A, 1);
+
+      if (debug) printf("INC A         (INC $%02X)\n", value);
+      break;
     case 0x23: // INC HL
       HL = bytesToWord(gb->cpu.H, gb->cpu.L);
       addRegisterWord(gb, &HL, 1);
@@ -571,66 +632,87 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("INC HL         (INC $%02X)\n", HL);
       break;
-		case 0x87: // ADD A, A
-			addRegister(gb, &gb->cpu.A, gb->cpu.A);	
+    case 0x13: // INC DE
+      DE = bytesToWord(gb->cpu.D, gb->cpu.E);
+      addRegisterWord(gb, &DE, 1);
+      wordToBytes(&gb->cpu.D, &gb->cpu.E, DE);
 
-			if (debug) printf("ADD A, A    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.A);
-			break;
-		case 0x19: // ADD HL, DE
-			HL = bytesToWord(gb->cpu.H, gb->cpu.L);
-			DE = bytesToWord(gb->cpu.D, gb->cpu.E);
+      if (debug) printf("INC DE         (INC $%02X)\n", DE);
+      break;
+    case 0x87: // ADD A, A
+      addRegister(gb, &gb->cpu.A, gb->cpu.A);	
+
+      if (debug) printf("ADD A, A    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.A);
+      break;
+    case 0x80: // ADD A, B
+      addRegister(gb, &gb->cpu.A, gb->cpu.B);
+      if (debug) printf("ADD A, B    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.B);
+      break;
+    case 0x19: // ADD HL, DE
+      HL = bytesToWord(gb->cpu.H, gb->cpu.L);
+      DE = bytesToWord(gb->cpu.D, gb->cpu.E);
       BC = HL;
 
       addRegisterWord(gb, &HL, DE);
-      
+
       wordToBytes(&gb->cpu.H, &gb->cpu.L, HL); 
-			
-			if (debug) printf("ADD HL, DE     (ADD $%04X $%04X = $%04X)\n", BC, DE, HL);
-			break;
-		case 0x2F: // CPL
+
+      if (debug) printf("ADD HL, DE     (ADD $%04X $%04X = $%04X)\n", BC, DE, HL);
+      break;
+    case 0x39: // ADD HL, SP
+      HL = bytesToWord(gb->cpu.H, gb->cpu.L);
+      BC = HL;
+
+      addRegisterWord(gb, &HL, gb->cpu.SP);
+
+      wordToBytes(&gb->cpu.H, &gb->cpu.L, HL); 
+
+      if (debug) printf("ADD HL, SP     (ADD $%04X $%04X = $%04X)\n", BC, gb->cpu.SP, HL);
+      break;
+    case 0x2F: // CPL
       value = gb->cpu.A;
-			gb->cpu.A = ~gb->cpu.A;
-			gb->cpu.F |= (Z | H);
+      gb->cpu.A = ~gb->cpu.A;
+      gb->cpu.F |= (Z | H);
 
-			if (debug) printf("CPL           (CPL $%02X)\n", value);
-			break;
-		case 0xCB: // Prefix for bitwise instructions
-			uint8_t bitwiseOpcode = fetch(gb);
+      if (debug) printf("CPL           (CPL $%02X)\n", value);
+      break;
+    case 0xCB: // Prefix for bitwise instructions
+      uint8_t bitwiseOpcode = fetch(gb);
 
-			switch(bitwiseOpcode)
-			{
-				case 0x37: // SWAP A
-					value = gb->cpu.A;
-					swapNibblesRegister(&gb->cpu.A);	
-					if (debug) printf("SWAPA $%02X       (SWAPA $%02X)\n", value, gb->cpu.A);
-					break;
+      switch(bitwiseOpcode)
+      {
+        case 0x37: // SWAP A
+          value = gb->cpu.A;
+          swapNibblesRegister(&gb->cpu.A);	
+          if (debug) printf("SWAPA $%02X       (SWAPA $%02X)\n", value, gb->cpu.A);
+          break;
         case 0x87: // RES 0, A
           value = gb->cpu.A;
           gb->cpu.A &= 0b11111110;
           if (debug) printf("RES 0, A     (RES 0, $%02X  =  $%02X)\n", value, gb->cpu.A);
           break;
-				default:
-					if (debug) printf("Error! Second opcode not found after $CB prefix: $%02X\n", bitwiseOpcode);
-					break;
-			}	
+        default:
+          if (debug) printf("Error! Second opcode not found after $CB prefix: $%02X\n", bitwiseOpcode);
+          break;
+      }	
 
-			break;	
-		case 0xF3: // DI
-			gb->cpu.IME = 0;
-			gb->cpu.cycles += 3;
+      break;	
+    case 0xF3: // DI
+      gb->cpu.IME = 0;
+      gb->cpu.cycles += 3;
 
-			if (debug) printf("DI\n");
-			break;
-		case 0xFB: // EI
-			gb->cpu.IME = 1;
-			gb->cpu.cycles += 2;
-			
-			if (debug) printf("EI\n");
-			break;
+      if (debug) printf("DI\n");
+      break;
+    case 0xFB: // EI
+      gb->cpu.IME = 1;
+      gb->cpu.cycles += 2;
 
-		default:
-			if (debug) printf("Unknown opcode %02X\n", ins);
-			break;
+      if (debug) printf("EI\n");
+      break;
+
+    default:
+      if (debug) printf("Unknown opcode %02X\n", ins);
+      break;
 	}
 }
 
@@ -639,12 +721,11 @@ void executePPUCycle(Gameboy* gb)
 	// TODO: write out everything to a texture in the graphics struct
   
   // TODO: copy stuff out of vram into the texture
-  gb->memory[rLY]++;
+  // We just gaslighting that we doing something
+  gb->memory[rLY] = (gb->memory[rLY] + 1) % 153;
 
-  if (gb->memory[rLY] > 153)
-  {
-    gb->memory[rLY] = 0;
-  }
+  // Blit ts
+  updateGraphics(&gb->graphics);
 }
 
 void runGameboy(Gameboy* gb)
@@ -669,25 +750,24 @@ void runGameboy(Gameboy* gb)
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 	}
 
-	updateGraphics(&gb->graphics);
-	size_t executeAmountInstructions = 70000;//(0x00FF * 3) * 0x40;
-	for (size_t i = 0; i < executeAmountInstructions; i++)
-	{
-		executeInstruction(gb);
-    executePPUCycle(gb);
-	}
-	
-	/*
+  // size_t executeAmountInstructions = 700000;//(0x00FF * 3) * 0x40;
+  // for (size_t i = 0; i < executeAmountInstructions; i++)
+  // {
+  //   executeInstruction(gb);
+  //   if (i % 20 == 0)
+  //     executePPUCycle(gb);
+  // }
+  //
 	while (!gb->graphics.shouldQuit)
 	{
 		executeInstruction(gb);
+	   executePPUCycle(gb);
 
 		if (!(gb->flags & GRAPHICS_DISABLED))
 			updateGraphics(&gb->graphics);
 
 		sleepMs(MS_PER_CYCLE);
 	}
-	*/
 
 	if (debug)
 	{
