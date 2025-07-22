@@ -3,7 +3,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -g
 LINK_FLAGS = -lSDL2
 
-SRCS = src/main.c src/util.c src/gameboy.c src/graphics.c
+SRCS = src/main.c src/util.c src/gameboy.c src/graphics.c src/ppudecode.c
 
 OBJ_DIR = build
 OBJS = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(SRCS))
