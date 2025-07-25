@@ -16,7 +16,10 @@ typedef struct {
 	size_t len;
 } FileData;
 
-FileData readFile(const char*);
-bool     writeFile(const char*, uint8_t*, size_t);
+FileData readFile(const char* filename);
+bool     writeFile(const char* filename, uint8_t* data, size_t dataLen);
 
-void sleepMs(int);
+void sleepMs(int duration);
+
+uint8_t** allocateMatrix(size_t rows, size_t cols);
+void freeMatrix(uint8_t** matrix, size_t rows);

@@ -6,6 +6,7 @@
 #include <string.h>
 #include "util.h"
 #include "graphics.h"
+#include "ppudecode.h"
 #include "hardwareinc.h"
 
 #define SCREEN_WIDTH 160
@@ -18,6 +19,10 @@
 #define MS_PER_CYCLE (1000 / GAMEBOY_CLOCK_SPEED_HZ)
 
 #define CPU_DUMPFILENAME "cpu.bin"
+
+#define VRAM_AMOUNT 0x9FFF-0x8000
+#define VRAM_BEGIN 0x8000
+#define VRAM_TILES_AMOUNT VRAM_AMOUNT / 16
 
 enum GameboyFlags
 {
@@ -61,6 +66,7 @@ typedef struct
 	int flags;
 
 	uint8_t* memory;
+  uint8_t* vram;
 
 	CPU cpu;
 

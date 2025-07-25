@@ -1,29 +1,30 @@
 #include "ppudecode.h"
 
-void printTileBit(uint8_t bit) {
-    if (bit == 0b11)
+void printTileBitPair(uint8_t bitPair) {
+    if (bitPair == 0b11)
     {
       printf("\033[42m11\033[0m");
-    } else if (bit == 0b10)
+    } else if (bitPair == 0b10)
     {
       printf("\033[48;5;46m10\033[0m");
-    } else if (bit == 0b01)
+    } else if (bitPair == 0b01)
     {
       printf("\033[48;5;22m01\033[0m");
-    } else if (bit == 0b00)
+    } else if (bitPair == 0b00)
     {
       printf("00");
     }
 }
 
-void printPixelPallettes(uint8_t* tileData, size_t tileAmount)
+void printPixelPallettes(uint8_t* tileData, size_t tileAmount, uint8_t* palletteOut, bool verbose)
 {
+  // ur welcome for the magic numbers
   for (size_t tileIndex = 0; tileIndex < tileAmount; tileIndex++)
   {
     // 64 total pixels in a tile, 16 bytes
-    uint8_t outputPallette[64];
+    // uint8_t outputPallette[64];
 
-    printf("  Parsing tile %d\n", tileIndex);
+    if (verbose) printf("  Parsing tile %ld\n", tileIndex);
 
     for (size_t tileByte = 0; tileByte < 16; tileByte += 2)
     {
@@ -44,12 +45,16 @@ void printPixelPallettes(uint8_t* tileData, size_t tileAmount)
 
       for (size_t bit = 0; bit < 8; bit++)
       {
-        outputPallette[(tileByte / 2) * 8 + bit] = pixels[bit];
-        printTileBit(pixels[bit]);
+        // outputPallette[(tileByte / 2) * 8 + bit] = pixels[bit];
+        palletteOut[tileIndex * 64 + (tileByte / 2) * 8 + bit] = pixels[bit];
+
+        if (verbose) printTileBitPair(pixels[bit]);
       }
-      printf("\n");
+      if (verbose) printf("\n");
     }
 
+    // // Example on retreiving from outputPallette
+    //
     // printf("\n");
     // printf(" Output pallete\n");
     // for (size_t y = 0; y < 8; y++)

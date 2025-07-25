@@ -65,3 +65,25 @@ void sleepMs(int milliseconds) {
     usleep(milliseconds * 1000); // POSIX (Linux, macOS)
 #endif
 }
+
+uint8_t** allocateMatrix(size_t rows, size_t cols) {
+    uint8_t** matrix = malloc(rows * sizeof(uint8_t*));
+    for (size_t i = 0; i < rows; i++) {
+        matrix[i] = malloc(cols * sizeof(uint8_t));
+    }
+    
+    for (size_t i = 0; i < rows; i++) {
+        for (size_t j = 0; j < cols; j++) {
+            matrix[i][j] = i * cols + j + 1; 
+        }
+    }
+
+    return matrix;
+}
+
+void freeMatrix(uint8_t** matrix, size_t rows) {
+    for (size_t i = 0; i < rows; i++) {
+        free(matrix[i]); 
+    }
+    free(matrix); 
+}

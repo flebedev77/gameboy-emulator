@@ -44,6 +44,9 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
+  gb->vram = malloc(VRAM_AMOUNT);
+  memset(gb->vram, 0, VRAM_AMOUNT);
+
 	gb->memory[rLY] = 0x8F; // Gaslight the program into thinking we in vblank
 
 	if (verbose)
@@ -603,7 +606,7 @@ void executeInstruction(Gameboy* gb)
     case 0x0B: // DEC BC
       word = bytesToWord(gb->cpu.B, gb->cpu.C);
       // Apparently we can just do this without setting any flags, according to gekko.fi'spseudocode
-      wordToBytes(&gb->cpu.B, &gb->cpu.B, word-1);
+      wordToBytes(&gb->cpu.B, &gb->cpu.C, word-1);
 
       if (debug) printf("DEC BC         (DEC $%04X)\n", word);
       break;
@@ -630,14 +633,14 @@ void executeInstruction(Gameboy* gb)
       addRegisterWord(gb, &HL, 1);
       wordToBytes(&gb->cpu.H, &gb->cpu.L, HL);
 
-      if (debug) printf("INC HL         (INC $%02X)\n", HL);
+      if (debug) printf("INC HL         (INC $%04X)\n", HL);
       break;
     case 0x13: // INC DE
       DE = bytesToWord(gb->cpu.D, gb->cpu.E);
       addRegisterWord(gb, &DE, 1);
       wordToBytes(&gb->cpu.D, &gb->cpu.E, DE);
 
-      if (debug) printf("INC DE         (INC $%02X)\n", DE);
+      if (debug) printf("INC DE         (INC $%04X)\n", DE);
       break;
     case 0x87: // ADD A, A
       addRegister(gb, &gb->cpu.A, gb->cpu.A);	
@@ -720,6 +723,7 @@ void executePPUCycle(Gameboy* gb)
 {
 	// TODO: write out everything to a texture in the graphics struct
   
+  
   // TODO: copy stuff out of vram into the texture
   // We just gaslighting that we doing something
   gb->memory[rLY] = (gb->memory[rLY] + 1) % 153;
@@ -750,24 +754,24 @@ void runGameboy(Gameboy* gb)
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 	}
 
-  // size_t executeAmountInstructions = 700000;//(0x00FF * 3) * 0x40;
-  // for (size_t i = 0; i < executeAmountInstructions; i++)
-  // {
-  //   executeInstruction(gb);
-  //   if (i % 20 == 0)
-  //     executePPUCycle(gb);
-  // }
-  //
-	while (!gb->graphics.shouldQuit)
-	{
-		executeInstruction(gb);
-	   executePPUCycle(gb);
+  size_t executeAmountInstructions = 700000;//(0x00FF * 3) * 0x40;
+  for (size_t i = 0; i < executeAmountInstructions; i++)
+  {
+    executeInstruction(gb);
+    if (i % 20 == 0)
+      executePPUCycle(gb);
+  }
 
-		if (!(gb->flags & GRAPHICS_DISABLED))
-			updateGraphics(&gb->graphics);
-
-		sleepMs(MS_PER_CYCLE);
-	}
+	// while (!gb->graphics.shouldQuit)
+	// {
+	// 	executeInstruction(gb);
+	//    executePPUCycle(gb);
+	//
+	// 	if (!(gb->flags & GRAPHICS_DISABLED))
+	// 		updateGraphics(&gb->graphics);
+	//
+	// 	sleepMs(MS_PER_CYCLE);
+	// }
 
 	if (debug)
 	{
@@ -785,6 +789,7 @@ void destroyGameboy(Gameboy* gb)
 
 	free(gb->rom.data);
 	free(gb->memory);
+  free(gb->vram);
 
 	if (!(gb->flags & GRAPHICS_DISABLED))
 		destroyGraphics(&gb->graphics);
