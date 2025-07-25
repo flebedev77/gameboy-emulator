@@ -47,7 +47,7 @@ void initGameboy(Gameboy* gb, const char* romFilename)
   gb->vram = malloc(VRAM_AMOUNT);
   memset(gb->vram, 0, VRAM_AMOUNT);
 
-	gb->memory[rLY] = 0x8F; // Gaslight the program into thinking we in vblank
+	gb->memory[rLY] = 0x90; // Gaslight the program into thinking we in vblank
 
 	if (verbose)
 		printf("Copying rom (%ld bytes) into memory map (%d bytes)\n", gb->rom.len, MEMORY_SIZE);
@@ -722,7 +722,12 @@ void executeInstruction(Gameboy* gb)
 void executePPUCycle(Gameboy* gb)
 {
 	// TODO: write out everything to a texture in the graphics struct
-  
+  for (size_t i = 0; i < VRAM_AMOUNT; i++)
+  {
+    gb->vram[i] = gb->memory[VRAM_BEGIN + i];
+  }
+  uint8_t pallette[VRAM_TILES_AMOUNT * 64];
+  printPixelPallettes(&gb->vram[0], VRAM_TILES_AMOUNT, &pallette[0], true);
   
   // TODO: copy stuff out of vram into the texture
   // We just gaslighting that we doing something
@@ -754,13 +759,12 @@ void runGameboy(Gameboy* gb)
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 	}
 
-  size_t executeAmountInstructions = 700000;//(0x00FF * 3) * 0x40;
+  size_t executeAmountInstructions = 11900;//(0x00FF * 3) * 0x40;
   for (size_t i = 0; i < executeAmountInstructions; i++)
   {
     executeInstruction(gb);
-    if (i % 20 == 0)
-      executePPUCycle(gb);
   }
+  executePPUCycle(gb);
 
 	// while (!gb->graphics.shouldQuit)
 	// {

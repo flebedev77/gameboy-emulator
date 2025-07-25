@@ -20,8 +20,9 @@
 
 #define CPU_DUMPFILENAME "cpu.bin"
 
-#define VRAM_AMOUNT 0x9FFF-0x8000
 #define VRAM_BEGIN 0x8000
+#define VRAM_END 0x9FFF
+#define VRAM_AMOUNT (VRAM_END - VRAM_BEGIN)
 #define VRAM_TILES_AMOUNT VRAM_AMOUNT / 16
 
 enum GameboyFlags
