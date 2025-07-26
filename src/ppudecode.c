@@ -1,5 +1,30 @@
 #include "ppudecode.h"
 
+// https://gbdev.io/pandocs/Palettes.html
+uint8_t mapPalletteToColor(uint8_t pixel)
+{
+  uint8_t color = 0;
+
+  switch (pixel)
+  {
+    case 0:
+      color = 255;
+      break;
+    case 1:
+      color = 150;
+      break;
+    case 2:
+      color = 100;
+      break;
+    case 3:
+      color = 0;
+      break;
+  }
+
+  return color;
+}
+
+
 void printTileBitPair(uint8_t bitPair) {
     if (bitPair == 0b11)
     {
@@ -26,27 +51,27 @@ void printPixelPallettes(uint8_t* tileData, size_t tileAmount, uint8_t* pallette
 
     if (verbose) printf("  Parsing tile %ld\n", tileIndex);
 
-    for (size_t tileByte = 0; tileByte < 16; tileByte += 2)
+    for (size_t tileByte = 0; tileByte < VRAM_SINGLE_TILE_WIDTH * 2; tileByte += 2)
     {
-      size_t byteIndex = (tileIndex * 16) + tileByte;
+      size_t byteIndex = (tileIndex * VRAM_SINGLE_TILE_WIDTH * 2) + tileByte;
       // processing the entire tile here
       uint16_t line = 0;
-      uint8_t pixels[8]; // the pixels in the current line containing two bits
-      for (int bit = 7; bit >= 0; bit--)
+      uint8_t pixels[VRAM_SINGLE_TILE_WIDTH]; // the pixels in the current line containing two bits
+      for (int bit = VRAM_SINGLE_TILE_WIDTH - 1; bit >= 0; bit--)
       {
         //tileData[byteIndex+1] is the hb of the 2bpp
         line |= ((tileData[byteIndex] & (1 << bit)) + ((tileData[byteIndex + 1] & (1 << bit)) << 1)) << bit;
       }
 
-      for (int bit = 0; bit < 8; bit++)
+      for (int bit = 0; bit < VRAM_SINGLE_TILE_WIDTH; bit++)
       {
-        pixels[7-bit] = (line >> (bit * 2)) & 0b11;
+        pixels[(VRAM_SINGLE_TILE_WIDTH - 1) - bit] = (line >> (bit * 2)) & 0b11;
       }
 
-      for (size_t bit = 0; bit < 8; bit++)
+      for (size_t bit = 0; bit < VRAM_SINGLE_TILE_WIDTH; bit++)
       {
         // outputPallette[(tileByte / 2) * 8 + bit] = pixels[bit];
-        palletteOut[tileIndex * 64 + (tileByte / 2) * 8 + bit] = pixels[bit];
+        palletteOut[tileIndex * VRAM_SINGLE_TILE_LEN + (tileByte / 2) * VRAM_SINGLE_TILE_WIDTH + bit] = pixels[bit];
 
         if (verbose) printTileBitPair(pixels[bit]);
       }

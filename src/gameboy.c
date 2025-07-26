@@ -726,15 +726,13 @@ void executePPUCycle(Gameboy* gb)
   {
     gb->vram[i] = gb->memory[VRAM_BEGIN + i];
   }
-  uint8_t pallette[VRAM_TILES_AMOUNT * 64];
-  printPixelPallettes(&gb->vram[0], VRAM_TILES_AMOUNT, &pallette[0], true);
-  
+
   // TODO: copy stuff out of vram into the texture
   // We just gaslighting that we doing something
   gb->memory[rLY] = (gb->memory[rLY] + 1) % 153;
 
   // Blit ts
-  updateGraphics(&gb->graphics);
+  updateGraphics(&gb->graphics, &gb->vram[0], gb->flags & DEBUG);
 }
 
 void runGameboy(Gameboy* gb)
@@ -766,6 +764,8 @@ void runGameboy(Gameboy* gb)
   }
   executePPUCycle(gb);
 
+  sleepMs(1000);
+
 	// while (!gb->graphics.shouldQuit)
 	// {
 	// 	executeInstruction(gb);
@@ -774,7 +774,7 @@ void runGameboy(Gameboy* gb)
 	// 	if (!(gb->flags & GRAPHICS_DISABLED))
 	// 		updateGraphics(&gb->graphics);
 	//
-	// 	sleepMs(MS_PER_CYCLE);
+	// 	sleepMs(CPU_MS_PER_CYCLE);
 	// }
 
 	if (debug)

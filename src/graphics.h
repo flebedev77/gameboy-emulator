@@ -1,5 +1,10 @@
 #pragma once
 #include <SDL2/SDL.h>
+#include <stdint.h>
+#include <stdio.h>
+#include "ppudecode.h"
+#include "util.h"
+#include "globals.h"
 
 typedef struct
 {
@@ -10,10 +15,14 @@ typedef struct
 	bool shouldQuit;
 
 	bool inited;
+
+  SDL_Surface* windowSurface;
+
+  int width, height;
 } Graphics;
 
 bool initGraphics(Graphics*, int w, int h);
 
-void updateGraphics(Graphics*);
+void updateGraphics(Graphics* g, uint8_t* vram, bool verbose);
 
 void destroyGraphics(Graphics*);
