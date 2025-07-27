@@ -2,6 +2,8 @@
 
 A simple Gameboy emulator written in C
 
+![Hello world screenshot](screenshots/helloworld.png)
+
 Features:
  - [x] Unaccurate
  - [x] Unoptimised
