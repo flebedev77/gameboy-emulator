@@ -44,10 +44,9 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
-  gb->vram = malloc(VRAM_AMOUNT);
-  memset(gb->vram, 0, VRAM_AMOUNT);
+  gb->vram = &gb->memory[VRAM_BEGIN];
 
-	gb->memory[rLY] = 0x90; // Gaslight the program into thinking we in vblank
+	gb->memory[rLY] = 0x90; // Gaslight the program into thinking we start in vblank
 
 	if (verbose)
 		printf("Copying rom (%ld bytes) into memory map (%d bytes)\n", gb->rom.len, MEMORY_SIZE);
@@ -721,14 +720,8 @@ void executeInstruction(Gameboy* gb)
 
 void executePPUCycle(Gameboy* gb)
 {
-	// TODO: write out everything to a texture in the graphics struct
-  for (size_t i = 0; i < VRAM_AMOUNT; i++)
-  {
-    gb->vram[i] = gb->memory[VRAM_BEGIN + i];
-  }
-
-  // TODO: copy stuff out of vram into the texture
-  // We just gaslighting that we doing something
+  // We just gaslighting that we going slow,
+  // in reality we blitting the entire frame instantly on the cpu 
   gb->memory[rLY] = (gb->memory[rLY] + 1) % 153;
 
   // Blit ts
@@ -751,32 +744,37 @@ void runGameboy(Gameboy* gb)
 
 	bool debug = gb->flags & DEBUG;
 
+  if (gb->flags & VERBOSE)
+  {
+    printf("Booting up gameboy\n");
+  }
+
 	if (debug)
 	{
 		printf("\nCPU execution log\n");
 		printf(" OP  MEM  ASEM              (EVAL) \n");
-	}
 
-  size_t executeAmountInstructions = 11900;//(0x00FF * 3) * 0x40;
-  for (size_t i = 0; i < executeAmountInstructions; i++)
+    size_t executeAmountInstructions = 11900;//(0x00FF * 3) * 0x40;
+    for (size_t i = 0; i < executeAmountInstructions; i++)
+    {
+      executeInstruction(gb);
+    }
+    for (size_t i = 0; i < 1; i++)
+      executePPUCycle(gb);
+
+  } else
   {
-    executeInstruction(gb);
+    while (!gb->graphics.shouldQuit)
+    {
+      executeInstruction(gb);
+
+    	if (!(gb->flags & GRAPHICS_DISABLED))
+        executePPUCycle(gb);
+
+    	sleepMs(MASTER_MS_PER_CYCLE);
+    }
   }
-  for (size_t i = 0; i < 1; i++)
-    executePPUCycle(gb);
 
-  sleepMs(1000000);
-
-	// while (!gb->graphics.shouldQuit)
-	// {
-	// 	executeInstruction(gb);
-	//    executePPUCycle(gb);
-	//
-	// 	if (!(gb->flags & GRAPHICS_DISABLED))
-	// 		updateGraphics(&gb->graphics);
-	//
-	// 	sleepMs(CPU_MS_PER_CYCLE);
-	// }
 
 	if (debug)
 	{
@@ -794,8 +792,10 @@ void destroyGameboy(Gameboy* gb)
 
 	free(gb->rom.data);
 	free(gb->memory);
-  free(gb->vram);
 
 	if (!(gb->flags & GRAPHICS_DISABLED))
 		destroyGraphics(&gb->graphics);
+
+  if (gb->flags & VERBOSE)
+    printf("Successfully freed gameboy\n");
 }

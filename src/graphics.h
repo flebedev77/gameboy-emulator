@@ -23,6 +23,6 @@ typedef struct
 
 bool initGraphics(Graphics*, int w, int h);
 
-void updateGraphics(Graphics* g, uint8_t* vram, bool verbose);
+void updateGraphics(Graphics* g, uint8_t* vram, bool debug);
 
 void destroyGraphics(Graphics*);

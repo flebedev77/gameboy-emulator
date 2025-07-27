@@ -7,7 +7,6 @@
 #include "globals.h"
 #include "util.h"
 #include "graphics.h"
-#include "ppudecode.h"
 #include "hardwareinc.h"
 
 enum GameboyFlags

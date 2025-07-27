@@ -52,7 +52,7 @@ size_t xyToPixelIndex(int x, int y)
   return (y * VRAM_BUFFER_WIDTH) + x;
 }
 
-void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
+void updateGraphics(Graphics* g, uint8_t* vram, bool debug)
 {
 	bool pollStatus = SDL_PollEvent(&g->event);
 
@@ -71,9 +71,6 @@ void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
 
   float greenessFactor = 1.f - (VIDEO_GREENESS / 100.f);
 
-  if (verbose)
-    printf("                                              Tilemap:\n");
-
   uint32_t* pixels = (uint32_t*)g->windowSurface->pixels; 
   for (int y = 0; y < VRAM_TILEMAP_WIDTH; y++)
   {
@@ -82,38 +79,24 @@ void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
       size_t index = (y * VRAM_TILEMAP_WIDTH) + x;
       uint8_t tileIndex = vram[VRAM_TILEMAP_BEGIN + index];
 
-      // if (verbose) printf("%d ", tileIndex);
-
       uint8_t tilePallette[VRAM_SINGLE_TILE_LEN];
       printPixelPallettes(vram + VRAM_TILEDATA_BEGIN + ((VRAM_SINGLE_TILE_WIDTH * 2) * tileIndex), 1, &tilePallette[0], false);
 
-      // pixels[xyToPixelIndex(x * VRAM_SINGLE_TILE_WIDTH, y * VRAM_SINGLE_TILE_WIDTH)] = SDL_MapRGB(g->windowSurface->format, 255, 255, 255);
-
-      for (int ty = 0; ty < VRAM_SINGLE_TILE_WIDTH-1; ty++)
+      int tileSize = (debug) ? VRAM_SINGLE_TILE_WIDTH - 1 : VRAM_SINGLE_TILE_WIDTH;
+      for (int ty = 0; ty < tileSize; ty++)
       {
-        for (int tx = 0; tx < VRAM_SINGLE_TILE_WIDTH-1; tx++)
+        for (int tx = 0; tx < tileSize; tx++)
         {
           size_t pixelIndex = xyToPixelIndex(x * VRAM_SINGLE_TILE_WIDTH, y * VRAM_SINGLE_TILE_WIDTH) + xyToPixelIndex(tx, ty);// + (ty * VRAM_SINGLE_TILE_WIDTH) + tx;
           uint8_t pixel = tilePallette[ty * VRAM_SINGLE_TILE_WIDTH + tx];
           uint8_t gbColor = mapPalletteToColor(pixel);
-          // if (verbose && tileIndex != 0) printf("%d", pixel);
 
           pixels[pixelIndex] = SDL_MapRGB(g->windowSurface->format, gbColor * greenessFactor, gbColor, gbColor * greenessFactor);
-          // renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);
-          // SDL_RenderCopy(g->renderer, renderTex, NULL, NULL);
         }
-        // if (verbose && tileIndex != 0) printf("\n");
       }
-      // if (verbose && tileIndex != 0) printf("\n\n");
 
     }
   }
-
-  // for (int i = 0; i < VRAM_TILES_AMOUNT * VRAM_SINGLE_TILE_LEN; i++)
-  // {
-  //   printf("%02X ", pallette[i]);
-  //   if (i % 8 == 0) printf("\n");
-  // }
 
   renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);
   SDL_RenderCopy(g->renderer, renderTex, NULL, NULL);
