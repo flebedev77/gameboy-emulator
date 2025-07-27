@@ -5,7 +5,7 @@ A simple Gameboy emulator written in C
 Features:
  - [x] Unaccurate
  - [x] Unoptimised
- - [x] Basic emulation (only hello world working)
+ - [x] Basic emulation (hello world working)
  - [x] Simple code which is easy to learn and understand from
  - [x] Compiles to Windows (Mingw), Mac OS, Web, Linux and other Unix like operating systems
  - [ ] Runs most games
