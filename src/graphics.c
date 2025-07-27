@@ -26,8 +26,8 @@ bool initGraphics(Graphics* g, int width, int height)
 		return 1;
 	}
 
-  int windowSurfaceSize = VRAM_TILEMAP_WIDTH * VRAM_SINGLE_TILE_WIDTH;
-  g->windowSurface = SDL_CreateRGBSurface(0, windowSurfaceSize, windowSurfaceSize, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
+  // int windowSurfaceSize = 256;//VRAM_TILEMAP_WIDTH * VRAM_SINGLE_TILE_WIDTH;
+  g->windowSurface = SDL_CreateRGBSurface(0, VRAM_BUFFER_WIDTH, VRAM_BUFFER_HEIGHT, 32, 0x00FF0000, 0x0000FF00, 0x000000FF, 0xFF000000);
   if (g->windowSurface == NULL)
   {
     printf("SDL: window surface cloud not be created: %s\n", SDL_GetError());
@@ -47,6 +47,11 @@ bool initGraphics(Graphics* g, int width, int height)
 	return 0;
 }
 
+size_t xyToPixelIndex(int x, int y)
+{
+  return (y * VRAM_BUFFER_WIDTH) + x;
+}
+
 void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
 {
 	bool pollStatus = SDL_PollEvent(&g->event);
@@ -59,11 +64,12 @@ void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
 		}
 	}
 
+  SDL_Texture* renderTex;
+
   SDL_SetRenderDrawColor(g->renderer, 0, 0, 0, 255);
   SDL_RenderClear(g->renderer);
 
-  // uint8_t pallette[VRAM_TILES_AMOUNT * VRAM_SINGLE_TILE_LEN];
-  // printPixelPallettes(vram, VRAM_TILES_AMOUNT, &pallette[0], verbose);
+  float greenessFactor = 1.f - (VIDEO_GREENESS / 100.f);
 
   if (verbose)
     printf("                                              Tilemap:\n");
@@ -76,27 +82,30 @@ void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
       size_t index = (y * VRAM_TILEMAP_WIDTH) + x;
       uint8_t tileIndex = vram[VRAM_TILEMAP_BEGIN + index];
 
-      // if (verbose) printf("%02X ", tileIndex);
+      // if (verbose) printf("%d ", tileIndex);
 
-      if (tileIndex != 0)
+      uint8_t tilePallette[VRAM_SINGLE_TILE_LEN];
+      printPixelPallettes(vram + VRAM_TILEDATA_BEGIN + ((VRAM_SINGLE_TILE_WIDTH * 2) * tileIndex), 1, &tilePallette[0], false);
+
+      // pixels[xyToPixelIndex(x * VRAM_SINGLE_TILE_WIDTH, y * VRAM_SINGLE_TILE_WIDTH)] = SDL_MapRGB(g->windowSurface->format, 255, 255, 255);
+
+      for (int ty = 0; ty < VRAM_SINGLE_TILE_WIDTH-1; ty++)
       {
-        uint8_t tilePallette[VRAM_SINGLE_TILE_LEN];
-        printPixelPallettes(vram + VRAM_TILEDATA_BEGIN + sizeof(uint8_t) * tileIndex, 1, &tilePallette[0], false);
-
-        for (int ty = 0; ty < VRAM_SINGLE_TILE_WIDTH; ty++)
+        for (int tx = 0; tx < VRAM_SINGLE_TILE_WIDTH-1; tx++)
         {
-          for (int tx = 0; tx < VRAM_SINGLE_TILE_WIDTH; tx++)
-          {
-            size_t pixelIndex = (index * VRAM_SINGLE_TILE_LEN) + ty * VRAM_SINGLE_TILE_WIDTH + tx;
-            uint8_t pixel = tilePallette[ty * VRAM_SINGLE_TILE_WIDTH + tx];
-            uint8_t gbColor = mapPalletteToColor(pixel);
-            if (verbose) printf("%d", pixel);
-            pixels[pixelIndex] = SDL_MapRGB(g->windowSurface->format, gbColor, gbColor, gbColor);
-          }
-          if (verbose) printf("\n");
+          size_t pixelIndex = xyToPixelIndex(x * VRAM_SINGLE_TILE_WIDTH, y * VRAM_SINGLE_TILE_WIDTH) + xyToPixelIndex(tx, ty);// + (ty * VRAM_SINGLE_TILE_WIDTH) + tx;
+          uint8_t pixel = tilePallette[ty * VRAM_SINGLE_TILE_WIDTH + tx];
+          uint8_t gbColor = mapPalletteToColor(pixel);
+          // if (verbose && tileIndex != 0) printf("%d", pixel);
+
+          pixels[pixelIndex] = SDL_MapRGB(g->windowSurface->format, gbColor * greenessFactor, gbColor, gbColor * greenessFactor);
+          // renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);
+          // SDL_RenderCopy(g->renderer, renderTex, NULL, NULL);
         }
-        if (verbose) printf("\n\n");
+        // if (verbose && tileIndex != 0) printf("\n");
       }
+      // if (verbose && tileIndex != 0) printf("\n\n");
+
     }
   }
 
@@ -106,7 +115,7 @@ void updateGraphics(Graphics* g, uint8_t* vram, bool verbose)
   //   if (i % 8 == 0) printf("\n");
   // }
 
-  SDL_Texture* renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);
+  renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);
   SDL_RenderCopy(g->renderer, renderTex, NULL, NULL);
 
 	SDL_RenderPresent(g->renderer);

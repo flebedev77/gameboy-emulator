@@ -1,7 +1,9 @@
 #pragma once
 
-#define SCREEN_WIDTH 160
-#define SCREEN_HEIGHT 144
+// #define SCREEN_WIDTH 160
+// #define SCREEN_HEIGHT 144
+#define SCREEN_WIDTH 800
+#define SCREEN_HEIGHT 800
 
 #define MEMORY_SIZE 0x10000
 #define MEMORY_DUMPFILENAME "memory.bin"
@@ -24,3 +26,8 @@
 
 #define VRAM_SINGLE_TILE_WIDTH 8
 #define VRAM_SINGLE_TILE_LEN (VRAM_SINGLE_TILE_WIDTH * VRAM_SINGLE_TILE_WIDTH)
+
+#define VRAM_BUFFER_WIDTH 256
+#define VRAM_BUFFER_HEIGHT 256
+
+#define VIDEO_GREENESS 50 // In percent, 100% fully green, 0% white

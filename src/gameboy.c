@@ -762,9 +762,10 @@ void runGameboy(Gameboy* gb)
   {
     executeInstruction(gb);
   }
-  executePPUCycle(gb);
+  for (size_t i = 0; i < 1; i++)
+    executePPUCycle(gb);
 
-  sleepMs(1000);
+  sleepMs(1000000);
 
 	// while (!gb->graphics.shouldQuit)
 	// {
