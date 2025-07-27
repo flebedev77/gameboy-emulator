@@ -95,7 +95,7 @@ int main()
 	Gameboy gb = {};
 	gb.flags = VERBOSE | DEBUG;
 
-	initGameboy(&gb, "testroms/helloworld.gb");
+	initGameboy(&gb, "testroms/picture.gb");
 
 	runGameboy(&gb);
 

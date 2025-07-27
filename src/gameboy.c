@@ -153,6 +153,33 @@ void setZeroflag(Gameboy* gb, uint8_t value)
 		gb->cpu.F &= ~Z;
 }
 
+void adcRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
+{
+	uint16_t result = (uint16_t)*reg + (uint16_t)value + (uint16_t)(gb->cpu.F & C); 
+	uint8_t carryPerBit[8]; 
+
+	*reg = (uint8_t)result;
+
+
+	for (int i = 0; i < 8; i++) {
+		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) + (gb->cpu.F & C) < 0 ? 1 : 0;
+	}
+
+	setZeroflag(gb, result);
+
+	gb->cpu.F |= N;
+
+	if (carryPerBit[3])
+		gb->cpu.F |= H;
+	else 
+		gb->cpu.F &= ~H;
+
+	if (carryPerBit[7])
+		gb->cpu.F |= C;
+	else
+		gb->cpu.F &= ~C;	
+}
+
 void addRegisterWord(Gameboy* gb, uint16_t* reg, uint16_t value)
 {
 	uint32_t result = (uint32_t)*reg + (uint32_t)value; 
@@ -203,7 +230,7 @@ void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 	if (carryPerBit[7])
 		gb->cpu.F |= C;
 	else
-		gb->cpu.F &= ~carryPerBit[7];	
+		gb->cpu.F &= ~C;	
 }
 
 void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
@@ -230,7 +257,7 @@ void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 	if (carryPerBit[7])
 		gb->cpu.F |= C;
 	else
-		gb->cpu.F &= ~carryPerBit[7];	
+		gb->cpu.F &= ~C;	
 }
 
 void setOrFlags(Gameboy* gb)
@@ -296,6 +323,7 @@ void executeInstruction(Gameboy* gb)
 	int8_t raddr = 0x00;
 	uint8_t value = 0x00;
 	uint16_t BC, DE, HL;
+  uint8_t A;
 
 	if (debug) printf(" %02X $%04X ", ins, gb->cpu.PC-1);
 
@@ -344,10 +372,17 @@ void executeInstruction(Gameboy* gb)
       addr = fetchWord(gb);
 
       if (!(gb->cpu.F & Z))
-      {
         gb->cpu.PC = addr;
-      }
+
       if (debug) printf("JP C, $%04X\n", addr);
+      break;
+    case 0x38: // JP C, e8
+      raddr = (uint8_t)fetch(gb);
+
+      if (!(gb->cpu.F & Z))
+        gb->cpu.PC += raddr;
+
+      if (debug) printf("JP C, %d\n", raddr);
       break;
     case 0xCD: // CALL a16
       addr = fetchWord(gb);
@@ -383,13 +418,32 @@ void executeInstruction(Gameboy* gb)
       break;
     case 0xFE: // CP n8
       value = fetch(gb);
-      uint8_t A = gb->cpu.A;
+      A = gb->cpu.A;
 
-      subRegister(gb, &gb->cpu.A, value);
+      //subRegister(gb, &gb->cpu.A, value);
+      subRegister(gb, &gb->cpu.A, gb->cpu.A); // TS is for the VBlANK CHECKS
 
       gb->cpu.A = A;
 
       if (debug) printf("CP $%02X         (CP $%02X, $%02X)\n", value, value, A);
+      break;
+    case 0xBA: // CP D
+      A = gb->cpu.A;
+
+      subRegister(gb, &gb->cpu.A, gb->cpu.D);
+
+      gb->cpu.A = A;
+
+      if (debug) printf("CP D         (CP $%02X, $%02X)\n", gb->cpu.D, A);
+      break;
+    case 0xBB: // CP E
+      A = gb->cpu.A;
+
+      subRegister(gb, &gb->cpu.A, gb->cpu.E);
+
+      gb->cpu.A = A;
+
+      if (debug) printf("CP E         (CP $%02X, $%02X)\n", gb->cpu.E, A);
       break;
     case 0xAF: // XOR A, A
       xorRegister(gb, gb->cpu.A);
@@ -435,6 +489,11 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("LD A, C          (LDA $%02X)\n", gb->cpu.A);	
       break;	
+    case 0x6F: // LD A, L
+      gb->cpu.A = gb->cpu.L;
+
+      if (debug) printf("LD A, L          (LDA $%02X)\n", gb->cpu.A);
+      break;
     case 0x47: // LD B, A
       gb->cpu.B = gb->cpu.A;
 
@@ -445,10 +504,20 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("LD C, A         (LDC $%02X)\n", gb->cpu.A);
       break;
+    case 0x57: // LD D, A
+      gb->cpu.D = gb->cpu.A;
+
+      if (debug) printf("LD D, A         (LDC $%02X)\n", gb->cpu.A);
+      break;
     case 0x5F: // LD E, A
       gb->cpu.E = gb->cpu.A;
 
       if (debug) printf("LD E, A         (LDE $%02X)\n", gb->cpu.A);
+      break;
+    case 0x67: // LD H, A
+      gb->cpu.H = gb->cpu.A;
+
+      if (debug) printf("LD H, A         (LDH $%02X)\n", gb->cpu.A);
       break;
     case 0x5E: // LD E, [HL]
       gb->cpu.E = readMemory(gb, bytesToWord(gb->cpu.H, gb->cpu.L));
@@ -474,31 +543,32 @@ void executeInstruction(Gameboy* gb)
       if (debug) printf("LD HL, $%04X\n", word);
       break;
     case 0x0E: // LDC n8
-      value = fetch(gb);
-      gb->cpu.C = value;
+      gb->cpu.C = fetch(gb);
 
       gb->cpu.cycles += 6;
-      if (debug) printf("LDC $%02X\n", value);
+      if (debug) printf("LDC $%02X\n", gb->cpu.C);
       break;
     case 0x06: // LDB n8
-      value = fetch(gb);
-      gb->cpu.B = value;
+      gb->cpu.B = fetch(gb);
 
       gb->cpu.cycles += 6;
-      if (debug) printf("LDB $%02X\n", value);
+      if (debug) printf("LDB $%02X\n", gb->cpu.B);
       break;
     case 0x3E: // LDA n8
-      value = fetch(gb);	
-      gb->cpu.A = value;
+      gb->cpu.A = fetch(gb);
       gb->cpu.cycles += 7;
 
-      if (debug) printf("LDA $%02X\n", value);
+      if (debug) printf("LDA $%02X\n", gb->cpu.A);
       break;
     case 0x16: // LDD n8
-      value = fetch(gb);
-      gb->cpu.D = value;
+      gb->cpu.D = fetch(gb);
 
-      if (debug) printf("LDD $%02X\n", value);
+      if (debug) printf("LDD $%02X\n", gb->cpu.D);
+      break;
+    case 0x1E: // LDE n8
+      gb->cpu.E = fetch(gb);
+
+      if (debug) printf("LDE $%02X\n", gb->cpu.E);
       break;
     case 0x01: // LD BC, n16
       word = fetchWord(gb);
@@ -551,6 +621,12 @@ void executeInstruction(Gameboy* gb)
       
       if (debug) printf("LD A, [DE]  (LDA [$%04X])\n", addr);
       break;
+    case 0x0A: // LD A, [BC]
+      addr = bytesToWord(gb->cpu.B, gb->cpu.C);
+      gb->cpu.A = readMemory(gb, addr);
+      
+      if (debug) printf("LD A, [BC]  (LDA [$%04X])\n", addr);
+      break;
     case 0xEA: // LD [a16], A
       addr = fetchWord(gb);
       writeMemory(gb, addr, gb->cpu.A);
@@ -602,12 +678,30 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("DEC C         (DEC $%02X)\n", value);
       break;
+    case 0x15: // DEC D
+      value = gb->cpu.D;
+      subRegister(gb, &gb->cpu.D, 1);
+
+      if (debug) printf("DEC D         (DEC $%02X)\n", value);
+      break;
+    case 0x1D: // DEC E
+      value = gb->cpu.E;
+      subRegister(gb, &gb->cpu.E, 1);
+
+      if (debug) printf("DEC E         (DEC $%02X)\n", value);
+      break;
     case 0x0B: // DEC BC
       word = bytesToWord(gb->cpu.B, gb->cpu.C);
       // Apparently we can just do this without setting any flags, according to gekko.fi'spseudocode
       wordToBytes(&gb->cpu.B, &gb->cpu.C, word-1);
 
       if (debug) printf("DEC BC         (DEC $%04X)\n", word);
+      break;
+    case 0x1B: // DEC DE
+      word = bytesToWord(gb->cpu.D, gb->cpu.E);
+      wordToBytes(&gb->cpu.D, &gb->cpu.E, word-1);
+
+      if (debug) printf("DEC DE         (DEC $%04X)\n", word);
       break;
     case 0x3B: // DEC SP
       word = gb->cpu.SP;
@@ -641,6 +735,13 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("INC DE         (INC $%04X)\n", DE);
       break;
+    case 0x03: // INC BC
+      BC = bytesToWord(gb->cpu.B, gb->cpu.C);
+      addRegisterWord(gb, &BC, 1);
+      wordToBytes(&gb->cpu.B, &gb->cpu.C, BC);
+
+      if (debug) printf("INC BC       (INC $%04X)\n", BC);
+      break;
     case 0x87: // ADD A, A
       addRegister(gb, &gb->cpu.A, gb->cpu.A);	
 
@@ -649,6 +750,10 @@ void executeInstruction(Gameboy* gb)
     case 0x80: // ADD A, B
       addRegister(gb, &gb->cpu.A, gb->cpu.B);
       if (debug) printf("ADD A, B    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.B);
+      break;
+    case 0x85: // ADD A, L
+      addRegister(gb, &gb->cpu.A, gb->cpu.L);
+      if (debug) printf("ADD A, L    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.L);
       break;
     case 0x19: // ADD HL, DE
       HL = bytesToWord(gb->cpu.H, gb->cpu.L);
@@ -670,6 +775,11 @@ void executeInstruction(Gameboy* gb)
       wordToBytes(&gb->cpu.H, &gb->cpu.L, HL); 
 
       if (debug) printf("ADD HL, SP     (ADD $%04X $%04X = $%04X)\n", BC, gb->cpu.SP, HL);
+      break;
+    case 0x8C: // ADC A, H
+      adcRegister(gb, &gb->cpu.A, gb->cpu.H);
+
+      if (debug) printf("ADC A, H     ($%02X $%02X)\n", gb->cpu.A, gb->cpu.H);
       break;
     case 0x2F: // CPL
       value = gb->cpu.A;
@@ -760,10 +870,10 @@ void runGameboy(Gameboy* gb)
     {
       executeInstruction(gb);
     }
-    for (size_t i = 0; i < 1; i++)
+    for (size_t i = 0; i < 400; i++)
       executePPUCycle(gb);
 
-    sleepMs(10000);
+    // sleepMs(10000);
   } else
   {
     while (!gb->graphics.shouldQuit)
