@@ -54,8 +54,9 @@ typedef struct
   uint8_t* vram;
 
 	CPU cpu;
-
 	Graphics graphics;
+
+  uint32_t frameIndex;
 } Gameboy;
 
 void initGameboy(Gameboy*, const char* romFilename);

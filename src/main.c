@@ -93,7 +93,7 @@ int main()
   // printPixelPallettes(&tiles[0], 1);
   // return 0;
 	Gameboy gb = {};
-	gb.flags = VERBOSE ;
+	gb.flags = VERBOSE | DEBUG;
 
 	initGameboy(&gb, "testroms/helloworld.gb");
 

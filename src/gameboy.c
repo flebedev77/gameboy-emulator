@@ -725,7 +725,8 @@ void executePPUCycle(Gameboy* gb)
   gb->memory[rLY] = (gb->memory[rLY] + 1) % 153;
 
   // Blit ts
-  updateGraphics(&gb->graphics, &gb->vram[0], gb->flags & DEBUG);
+  if (gb->memory[rLY] == 0)
+    updateGraphics(&gb->graphics, &gb->vram[0], gb->flags & DEBUG);
 }
 
 void runGameboy(Gameboy* gb)
@@ -749,7 +750,7 @@ void runGameboy(Gameboy* gb)
     printf("Booting up gameboy\n");
   }
 
-	if (debug)
+	if (!debug)
 	{
 		printf("\nCPU execution log\n");
 		printf(" OP  MEM  ASEM              (EVAL) \n");
@@ -762,16 +763,20 @@ void runGameboy(Gameboy* gb)
     for (size_t i = 0; i < 1; i++)
       executePPUCycle(gb);
 
+    sleepMs(10000);
   } else
   {
     while (!gb->graphics.shouldQuit)
     {
-      executeInstruction(gb);
+      gb->frameIndex++;
 
-    	if (!(gb->flags & GRAPHICS_DISABLED))
+      if (gb->frameIndex % 2 == 0)
+        executeInstruction(gb);
+
+      if (gb->frameIndex % 4 == 0)
         executePPUCycle(gb);
 
-    	sleepMs(MASTER_MS_PER_CYCLE);
+      sleepMs(MASTER_MS_PER_CYCLE);
     }
   }
 
