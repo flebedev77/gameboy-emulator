@@ -1,5 +1,35 @@
 #include "util.h"
 
+void seperateNibbles(uint8_t* H, uint8_t* L, uint8_t value)
+{
+	*L = value & 0x0F;
+	*H = (value & 0xF0) >> 4;
+}
+
+uint8_t constructNibblesByte(uint8_t H, uint8_t L)
+{
+	return (H << 4) + L;
+}
+
+uint16_t bytesToWord(uint8_t H, uint8_t L)
+{
+	return (H << 8) + L;
+}
+
+void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
+{
+	*L = word & 0x00FF;
+	*H = (word >> 8) & 0x00FF; 
+}
+
+void byteToBits(uint8_t byte, uint8_t* bitsOut)
+{
+  for (int i = 0; i < 8; i++)
+  {
+    bitsOut[i] = (byte & (1 << i)) ? 1 : 0;
+  }
+}
+
 FileData readFile(const char* filename)
 {
 	FILE* file = fopen(filename, "rb");

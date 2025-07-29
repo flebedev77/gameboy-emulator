@@ -44,7 +44,12 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
 
+
   gb->vram = &gb->memory[VRAM_BEGIN];
+
+  gb->vramAttr = (VRAMAttributes){};
+  gb->vramAttr.VRAM_TilemapBegin  = 0x9800;
+  gb->vramAttr.VRAM_TiledataBegin = 0x9000;
 
 	gb->memory[rLY] = 0x90; // Gaslight the program into thinking we start in vblank
 
@@ -57,7 +62,6 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 
 	if (verbose)
 		printf("Initialisation complete\n");
-
 }
 
 void performDump(Gameboy* gb)
@@ -80,28 +84,6 @@ void performDump(Gameboy* gb)
 			gb->cpu.SP			
 			);
 	writeFile(CPU_DUMPFILENAME, (uint8_t*)buf, 0x5F); // My dumbass can't calculate the length of a string properly
-}
-
-void seperateNibbles(uint8_t* H, uint8_t* L, uint8_t value)
-{
-	*L = value & 0x0F;
-	*H = (value & 0xF0) >> 4;
-}
-
-uint8_t constructNibblesByte(uint8_t H, uint8_t L)
-{
-	return (H << 4) + L;
-}
-
-uint16_t bytesToWord(uint8_t H, uint8_t L)
-{
-	return (H << 8) + L;
-}
-
-void wordToBytes(uint8_t* H, uint8_t* L, uint16_t word)
-{
-	*L = word & 0x00FF;
-	*H = (word >> 8) & 0x00FF; 
 }
 
 void writeMemory(Gameboy* gb, uint16_t addr, uint8_t value)
@@ -162,7 +144,7 @@ void adcRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 
 
 	for (int i = 0; i < 8; i++) {
-		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) + (gb->cpu.F & C) < 0 ? 1 : 0;
+		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) + (gb->cpu.F & C) > 0 ? 1 : 0;
 	}
 
 	setZeroflag(gb, result);
@@ -188,7 +170,7 @@ void addRegisterWord(Gameboy* gb, uint16_t* reg, uint16_t value)
 	*reg = (uint16_t)result;
 
 	for (int i = 0; i < 16; i++) {
-		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) < 0 ? 1 : 0;
+		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) > 0 ? 1 : 0;
 	}
 
 	setZeroflag(gb, (uint8_t)result);
@@ -215,7 +197,7 @@ void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 
 
 	for (int i = 0; i < 8; i++) {
-		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) < 0 ? 1 : 0;
+		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) > 0 ? 1 : 0;
 	}
 
 	setZeroflag(gb, result);
@@ -242,7 +224,7 @@ void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 
 	
 	for (int i = 0; i < 8; i++) {
-		carryPerBit[i] = ((*reg >> i) & 1) - ((value >> i) & 1) < 0 ? 1 : 0;
+		carryPerBit[i] = (int)((*reg >> i) & 1) - (int)((value >> i) & 1) < 0 ? 1 : 0;
 	}
 
 	setZeroflag(gb, result);
@@ -489,10 +471,10 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("LD A, C          (LDA $%02X)\n", gb->cpu.A);	
       break;	
-    case 0x6F: // LD A, L
-      gb->cpu.A = gb->cpu.L;
+    case 0x6F: // LD L, A
+      gb->cpu.L = gb->cpu.A;
 
-      if (debug) printf("LD A, L          (LDA $%02X)\n", gb->cpu.A);
+      if (debug) printf("LD L, A          (LDL $%02X)\n", gb->cpu.A);
       break;
     case 0x47: // LD B, A
       gb->cpu.B = gb->cpu.A;
@@ -743,17 +725,20 @@ void executeInstruction(Gameboy* gb)
       if (debug) printf("INC BC       (INC $%04X)\n", BC);
       break;
     case 0x87: // ADD A, A
+      value = gb->cpu.A;
       addRegister(gb, &gb->cpu.A, gb->cpu.A);	
 
-      if (debug) printf("ADD A, A    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.A);
+      if (debug) printf("ADD A, A    ($%02X $%02X)\n", value, gb->cpu.A);
       break;
     case 0x80: // ADD A, B
+      value = gb->cpu.A;
       addRegister(gb, &gb->cpu.A, gb->cpu.B);
-      if (debug) printf("ADD A, B    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.B);
+      if (debug) printf("ADD A, B    ($%02X $%02X)\n", value, gb->cpu.B);
       break;
     case 0x85: // ADD A, L
+      value = gb->cpu.A;
       addRegister(gb, &gb->cpu.A, gb->cpu.L);
-      if (debug) printf("ADD A, L    ($%02X $%02X)\n", gb->cpu.A, gb->cpu.L);
+      if (debug) printf("ADD A, L    ($%02X $%02X)\n", value, gb->cpu.L);
       break;
     case 0x19: // ADD HL, DE
       HL = bytesToWord(gb->cpu.H, gb->cpu.L);
@@ -777,9 +762,10 @@ void executeInstruction(Gameboy* gb)
       if (debug) printf("ADD HL, SP     (ADD $%04X $%04X = $%04X)\n", BC, gb->cpu.SP, HL);
       break;
     case 0x8C: // ADC A, H
+      value = gb->cpu.A;
       adcRegister(gb, &gb->cpu.A, gb->cpu.H);
 
-      if (debug) printf("ADC A, H     ($%02X $%02X)\n", gb->cpu.A, gb->cpu.H);
+      if (debug) printf("ADC A, H     ($%02X $%02X)\n", value, gb->cpu.H);
       break;
     case 0x2F: // CPL
       value = gb->cpu.A;
@@ -830,13 +816,43 @@ void executeInstruction(Gameboy* gb)
 
 void executePPUCycle(Gameboy* gb)
 {
+  uint8_t lcdcBits[8];
+  byteToBits(gb->memory[rLCDC], &lcdcBits[0]);
+
+  // if (lcdcBits[7] == LCDCF_OFF)
+  //   return;
+
   // We just gaslighting that we going slow,
   // in reality we blitting the entire frame instantly on the cpu 
   gb->memory[rLY] = (gb->memory[rLY] + 1) % 153;
 
   // Blit ts
   if (gb->memory[rLY] == 0)
-    updateGraphics(&gb->graphics, &gb->vram[0], gb->flags & DEBUG);
+  {
+
+    // if (lcdcBits[6])
+    //   gb->vramAttr.VRAM_TilemapBegin = 0x9C00 - VRAM_BEGIN;
+    // else
+    gb->vramAttr.VRAM_TilemapBegin = 0x9800 - VRAM_BEGIN;
+
+    if (!lcdcBits[4])
+    {
+      gb->vramAttr.VRAM_TiledataBegin = 0x8000 - VRAM_BEGIN;
+    }
+    else
+    {
+      gb->vramAttr.VRAM_TiledataBegin = 0x8800 - VRAM_BEGIN;
+    }
+
+    updateGraphics(
+        &gb->graphics,
+        &gb->vram[0],
+        gb->vramAttr.VRAM_TilemapBegin,
+        gb->vramAttr.VRAM_TiledataBegin,
+        !lcdcBits[4],
+        gb->flags & DEBUG
+        );
+  }
 }
 
 void runGameboy(Gameboy* gb)
@@ -860,20 +876,21 @@ void runGameboy(Gameboy* gb)
     printf("Booting up gameboy\n");
   }
 
-	if (!debug)
+	if (debug)
 	{
 		printf("\nCPU execution log\n");
 		printf(" OP  MEM  ASEM              (EVAL) \n");
 
-    size_t executeAmountInstructions = 11900;//(0x00FF * 3) * 0x40;
+    size_t executeAmountInstructions = 100000;//11900;//(0x00FF * 3) * 0x40;
     for (size_t i = 0; i < executeAmountInstructions; i++)
     {
       executeInstruction(gb);
     }
-    for (size_t i = 0; i < 400; i++)
+    for (size_t i = 0; i < 40; i++)
       executePPUCycle(gb);
 
     // sleepMs(10000);
+    // sleepMs(100000000);
   } else
   {
     while (!gb->graphics.shouldQuit)

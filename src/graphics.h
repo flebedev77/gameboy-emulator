@@ -23,6 +23,12 @@ typedef struct
 
 bool initGraphics(Graphics*, int w, int h);
 
-void updateGraphics(Graphics* g, uint8_t* vram, bool debug);
+void updateGraphics(Graphics* g,
+  uint8_t* vram,
+  uint16_t tilemapBegin,
+  uint16_t tiledataBegin,
+  bool eeMethod, // 8800 method, the tilemap indexes range from -128 to 127 from address 9000
+  bool debug
+  );
 
 void destroyGraphics(Graphics*);

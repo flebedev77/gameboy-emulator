@@ -52,7 +52,7 @@ size_t xyToPixelIndex(int x, int y)
   return (y * VRAM_BUFFER_WIDTH) + x;
 }
 
-void updateGraphics(Graphics* g, uint8_t* vram, bool debug)
+void updateGraphics(Graphics* g, uint8_t* vram, uint16_t tilemapBegin, uint16_t tiledataBegin, bool eeMethod, bool debug)
 {
 	bool pollStatus = SDL_PollEvent(&g->event);
 
@@ -77,10 +77,20 @@ void updateGraphics(Graphics* g, uint8_t* vram, bool debug)
     for (int x = 0; x < VRAM_TILEMAP_WIDTH; x++)
     {
       size_t index = (y * VRAM_TILEMAP_WIDTH) + x;
-      uint8_t tileIndex = vram[VRAM_TILEMAP_BEGIN + index];
+      uint8_t tileIndex = vram[tilemapBegin + index];
+
+      if (eeMethod)
+      {
+        // if (tileIndex > 128)
+        // {
+        //   tiledataBegin = 0x9000; 
+        // }
+      }
+
+      // printf("%d ", tileIndex);
 
       uint8_t tilePallette[VRAM_SINGLE_TILE_LEN];
-      printPixelPallettes(vram + VRAM_TILEDATA_BEGIN + ((VRAM_SINGLE_TILE_WIDTH * 2) * tileIndex), 1, &tilePallette[0], false);
+      printPixelPallettes(vram + tiledataBegin + ((VRAM_SINGLE_TILE_WIDTH * 2) * tileIndex), 1, &tilePallette[0], false);
 
       int tileSize = (debug) ? VRAM_SINGLE_TILE_WIDTH - 1 : VRAM_SINGLE_TILE_WIDTH;
       for (int ty = 0; ty < tileSize; ty++)

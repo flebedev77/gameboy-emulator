@@ -45,6 +45,12 @@ typedef struct
 	uint32_t cycles;
 } CPU;
 
+typedef struct
+{
+  uint16_t VRAM_TilemapBegin;
+  uint16_t VRAM_TiledataBegin;
+} VRAMAttributes;
+
 typedef struct 
 {
 	FileData rom; 
@@ -52,6 +58,8 @@ typedef struct
 
 	uint8_t* memory;
   uint8_t* vram;
+
+  VRAMAttributes vramAttr;
 
 	CPU cpu;
 	Graphics graphics;
