@@ -3,7 +3,7 @@
 int main()
 {
 	Gameboy gb = {};
-	gb.flags = VERBOSE;// | DEBUG;
+	gb.flags = VERBOSE | DEBUG;
 
 	initGameboy(&gb, "testroms/picture.gb");
 

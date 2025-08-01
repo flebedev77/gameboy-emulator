@@ -42,6 +42,8 @@ typedef struct
 
 	bool IME;
 
+  bool halted;
+
 	uint32_t cycles;
 } CPU;
 

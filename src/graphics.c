@@ -87,7 +87,7 @@ void updateGraphics(Graphics* g, uint8_t* vram, uint16_t tilemapBegin, uint16_t 
         // }
       }
 
-      // printf("%d ", tileIndex);
+      printf("%d ", tileIndex);
 
       uint8_t tilePallette[VRAM_SINGLE_TILE_LEN];
       printPixelPallettes(vram + tiledataBegin + ((VRAM_SINGLE_TILE_WIDTH * 2) * tileIndex), 1, &tilePallette[0], false);
@@ -106,6 +106,7 @@ void updateGraphics(Graphics* g, uint8_t* vram, uint16_t tilemapBegin, uint16_t 
       }
 
     }
+    printf("\n");
   }
 
   renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);

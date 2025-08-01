@@ -40,6 +40,7 @@ void initGameboy(Gameboy* gb, const char* romFilename)
 	gb->cpu.L = 0x03;
 
 	gb->cpu.IME = 1;
+  gb->cpu.halted = false;
 
 	gb->memory = malloc(MEMORY_SIZE);
 	memset(gb->memory, 0, MEMORY_SIZE);
@@ -137,29 +138,54 @@ void setZeroflag(Gameboy* gb, uint8_t value)
 
 void adcRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 {
-	uint16_t result = (uint16_t)*reg + (uint16_t)value + (uint16_t)(gb->cpu.F & C); 
-	uint8_t carryPerBit[8]; 
+  uint8_t carry = (gb->cpu.F & C) ? 1 : 0;
+  uint16_t sum = *reg + value + carry;
+  printf("%d %d ", *reg, sum);
+  if ((sum & 0xFF) == 0x00)
+    gb->cpu.F |= Z;
+  else
+    gb->cpu.F &= ~Z;
 
-	*reg = (uint8_t)result;
+  gb->cpu.F &= N;
 
+  if ((*reg ^ value ^ sum) & 0x10 ? 1 : 0)
+    gb->cpu.F |= H;
+  else
+    gb->cpu.F &= ~H;
 
-	for (int i = 0; i < 8; i++) {
-		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) + (gb->cpu.F & C) > 0 ? 1 : 0;
-	}
+  if ((sum & 0xFF00) ? 1 : 0)
+    gb->cpu.F |= C;
+  else
+    gb->cpu.F &= ~C;
 
-	setZeroflag(gb, result);
+  gb->cpu.A = sum & 0xFF; 
 
-	gb->cpu.F |= N;
-
-	if (carryPerBit[3])
-		gb->cpu.F |= H;
-	else 
-		gb->cpu.F &= ~H;
-
-	if (carryPerBit[7])
-		gb->cpu.F |= C;
-	else
-		gb->cpu.F &= ~C;	
+  //  uint16_t carry = (gb->cpu.F & C) ? 1 : 0;
+  //  printf("%d\n", carry);
+  // uint16_t result = (uint16_t)*reg + (uint16_t)value + carry; 
+  // uint8_t carryPerBit[8]; 
+  //
+  // *reg = (uint8_t)result;
+  //
+  //
+  //  for (int i = 0; i < 8; i++) {
+  //    carryPerBit[i] = (((*reg >> i) & 1) + ((value >> i) & 1) + carry) > 1 ? 1 : 0;
+  //    carry = (((*reg >> i) & 1) + ((value >> i) & 1) + carry) > 1 ? 1 : 0; // Update carry for the next bit
+  //  }
+  //
+  // setZeroflag(gb, result);
+  //
+  // gb->cpu.F |= N;
+  //
+  // if (carryPerBit[3])
+  // 	gb->cpu.F |= H;
+  // else 
+  // 	gb->cpu.F &= ~H;
+  //
+  // if (carryPerBit[7])
+  // 	gb->cpu.F |= C;
+  // else
+  // 	gb->cpu.F &= ~C;	
 }
 
 void addRegisterWord(Gameboy* gb, uint16_t* reg, uint16_t value)
@@ -190,29 +216,52 @@ void addRegisterWord(Gameboy* gb, uint16_t* reg, uint16_t value)
 
 void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 {
-	uint16_t result = (uint16_t)*reg + (uint16_t)value; 
-	uint8_t carryPerBit[8]; 
+  uint16_t sum = *reg + value;
+  // F_Z = ((sum & 0xFF) == 0x00);
+  if ((sum & 0xFF) == 0x00)
+    gb->cpu.F |= Z;
+  else
+    gb->cpu.F &= ~Z;
 
-	*reg = (uint8_t)result;
+  gb->cpu.F &= ~N;
 
+  // F_H = (*reg ^ value ^ sum) & 0x10 ? 1 : 0;
+  if ((*reg ^ value ^ sum) & 0x10)
+    gb->cpu.F |= H;
+  else
+    gb->cpu.F &= ~H;
 
-	for (int i = 0; i < 8; i++) {
-		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) > 0 ? 1 : 0;
-	}
+  // F_C = (sum & 0xFF00) ? 1 : 0;
+  if (sum & 0xFF00)
+    gb->cpu.F |= C;
+  else 
+    gb->cpu.F &= ~C;
 
-	setZeroflag(gb, result);
+  *reg = sum & 0xFF;
 
-	gb->cpu.F |= N;
-
-	if (carryPerBit[3])
-		gb->cpu.F |= H;
-	else 
-		gb->cpu.F &= ~H;
-
-	if (carryPerBit[7])
-		gb->cpu.F |= C;
-	else
-		gb->cpu.F &= ~C;	
+  // 	uint16_t result = (uint16_t)*reg + (uint16_t)value; 
+  // 	uint8_t carryPerBit[8]; 
+  //
+  // 	*reg = (uint8_t)result;
+  //
+  //
+  // 	for (int i = 0; i < 8; i++) {
+  // 		carryPerBit[i] = ((*reg >> i) & 1) + ((value >> i) & 1) > 0 ? 1 : 0;
+  // 	}
+  //
+  // 	setZeroflag(gb, result);
+  //
+  // 	gb->cpu.F |= N;
+  //
+  // 	if (carryPerBit[3])
+  // 		gb->cpu.F |= H;
+  // 	else 
+  // 		gb->cpu.F &= ~H;
+  //
+  // 	if (carryPerBit[7])
+  // 		gb->cpu.F |= C;
+  // 	else
+  // 		gb->cpu.F &= ~C;	
 }
 
 void subRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
@@ -296,10 +345,13 @@ uint16_t fetchWord(Gameboy* gb)
 
 void executeInstruction(Gameboy* gb)
 {
+  if (gb->cpu.halted) return;
+
 	bool debug = gb->flags & DEBUG;
 
 	uint8_t ins = fetch(gb);	
 
+  // These aren't the actual registers, they are just here for usage during the "cycle"
 	uint16_t addr = 0x0000;
 	uint16_t word = 0x0000;
 	int8_t raddr = 0x00;
@@ -607,7 +659,7 @@ void executeInstruction(Gameboy* gb)
       addr = bytesToWord(gb->cpu.B, gb->cpu.C);
       gb->cpu.A = readMemory(gb, addr);
       
-      if (debug) printf("LD A, [BC]  (LDA [$%04X])\n", addr);
+      if (debug) printf("LD A, [BC]  (LDA $%02X)\n", gb->cpu.A);
       break;
     case 0xEA: // LD [a16], A
       addr = fetchWord(gb);
@@ -722,7 +774,7 @@ void executeInstruction(Gameboy* gb)
       addRegisterWord(gb, &BC, 1);
       wordToBytes(&gb->cpu.B, &gb->cpu.C, BC);
 
-      if (debug) printf("INC BC       (INC $%04X)\n", BC);
+      if (debug) printf("INC BC       (INC $%04X)\n", BC - 1);
       break;
     case 0x87: // ADD A, A
       value = gb->cpu.A;
@@ -807,6 +859,11 @@ void executeInstruction(Gameboy* gb)
 
       if (debug) printf("EI\n");
       break;
+    case 0x76: // HALT
+      gb->cpu.halted = true;
+
+      if (debug) printf("HALT\n");
+      break;
 
     default:
       if (debug) printf("Unknown opcode %02X\n", ins);
@@ -833,16 +890,16 @@ void executePPUCycle(Gameboy* gb)
     // if (lcdcBits[6])
     //   gb->vramAttr.VRAM_TilemapBegin = 0x9C00 - VRAM_BEGIN;
     // else
-    gb->vramAttr.VRAM_TilemapBegin = 0x9800 - VRAM_BEGIN;
+      gb->vramAttr.VRAM_TilemapBegin = 0x9800 - VRAM_BEGIN;
 
-    if (!lcdcBits[4])
-    {
+    // if (lcdcBits[4])
+    // {
       gb->vramAttr.VRAM_TiledataBegin = 0x8000 - VRAM_BEGIN;
-    }
-    else
-    {
-      gb->vramAttr.VRAM_TiledataBegin = 0x8800 - VRAM_BEGIN;
-    }
+    // }
+    // else
+    // {
+    //   gb->vramAttr.VRAM_TiledataBegin = 0x8800 - VRAM_BEGIN;
+    // }
 
     updateGraphics(
         &gb->graphics,
@@ -885,11 +942,13 @@ void runGameboy(Gameboy* gb)
     for (size_t i = 0; i < executeAmountInstructions; i++)
     {
       executeInstruction(gb);
+
+      if (gb->cpu.halted) break;
     }
     for (size_t i = 0; i < 40; i++)
       executePPUCycle(gb);
 
-    // sleepMs(10000);
+    sleepMs(3000);
     // sleepMs(100000000);
   } else
   {
