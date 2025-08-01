@@ -140,7 +140,6 @@ void adcRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 {
   uint8_t carry = (gb->cpu.F & C) ? 1 : 0;
   uint16_t sum = *reg + value + carry;
-  printf("%d %d ", *reg, sum);
   if ((sum & 0xFF) == 0x00)
     gb->cpu.F |= Z;
   else
@@ -217,7 +216,6 @@ void addRegisterWord(Gameboy* gb, uint16_t* reg, uint16_t value)
 void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 {
   uint16_t sum = *reg + value;
-  // F_Z = ((sum & 0xFF) == 0x00);
   if ((sum & 0xFF) == 0x00)
     gb->cpu.F |= Z;
   else
@@ -225,13 +223,11 @@ void addRegister(Gameboy* gb, uint8_t* reg, uint8_t value)
 
   gb->cpu.F &= ~N;
 
-  // F_H = (*reg ^ value ^ sum) & 0x10 ? 1 : 0;
   if ((*reg ^ value ^ sum) & 0x10)
     gb->cpu.F |= H;
   else
     gb->cpu.F &= ~H;
 
-  // F_C = (sum & 0xFF00) ? 1 : 0;
   if (sum & 0xFF00)
     gb->cpu.F |= C;
   else 
@@ -876,8 +872,8 @@ void executePPUCycle(Gameboy* gb)
   uint8_t lcdcBits[8];
   byteToBits(gb->memory[rLCDC], &lcdcBits[0]);
 
-  // if (lcdcBits[7] == LCDCF_OFF)
-  //   return;
+  if (!lcdcBits[7])
+     return;
 
   // We just gaslighting that we going slow,
   // in reality we blitting the entire frame instantly on the cpu 
@@ -887,19 +883,19 @@ void executePPUCycle(Gameboy* gb)
   if (gb->memory[rLY] == 0)
   {
 
-    // if (lcdcBits[6])
-    //   gb->vramAttr.VRAM_TilemapBegin = 0x9C00 - VRAM_BEGIN;
-    // else
+    if (lcdcBits[6])
+      gb->vramAttr.VRAM_TilemapBegin = 0x9C00 - VRAM_BEGIN;
+    else
       gb->vramAttr.VRAM_TilemapBegin = 0x9800 - VRAM_BEGIN;
 
-    // if (lcdcBits[4])
-    // {
+    if (lcdcBits[4])
+    {
       gb->vramAttr.VRAM_TiledataBegin = 0x8000 - VRAM_BEGIN;
-    // }
-    // else
-    // {
-    //   gb->vramAttr.VRAM_TiledataBegin = 0x8800 - VRAM_BEGIN;
-    // }
+    }
+    else
+    {
+      gb->vramAttr.VRAM_TiledataBegin = 0x9000 - VRAM_BEGIN;
+    }
 
     updateGraphics(
         &gb->graphics,

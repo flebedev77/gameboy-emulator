@@ -52,6 +52,8 @@ size_t xyToPixelIndex(int x, int y)
   return (y * VRAM_BUFFER_WIDTH) + x;
 }
 
+static bool isTilemapWrap = false;
+
 void updateGraphics(Graphics* g, uint8_t* vram, uint16_t tilemapBegin, uint16_t tiledataBegin, bool eeMethod, bool debug)
 {
 	bool pollStatus = SDL_PollEvent(&g->event);
@@ -77,17 +79,23 @@ void updateGraphics(Graphics* g, uint8_t* vram, uint16_t tilemapBegin, uint16_t 
     for (int x = 0; x < VRAM_TILEMAP_WIDTH; x++)
     {
       size_t index = (y * VRAM_TILEMAP_WIDTH) + x;
-      uint8_t tileIndex = vram[tilemapBegin + index];
+      if (vram[tilemapBegin + index - 1] == 255 && vram[tilemapBegin + index] == 0) isTilemapWrap = true;
+      uint16_t tileIndex = (uint16_t)vram[tilemapBegin + index];
+
+
+      if (isTilemapWrap) tileIndex += 255;
 
       if (eeMethod)
       {
+        tiledataBegin = 0x9000 - VRAM_BEGIN;
+        tileIndex -= 128;
         // if (tileIndex > 128)
         // {
         //   tiledataBegin = 0x9000; 
         // }
       }
 
-      printf("%d ", tileIndex);
+      if (debug) printf("%04X ", tileIndex);
 
       uint8_t tilePallette[VRAM_SINGLE_TILE_LEN];
       printPixelPallettes(vram + tiledataBegin + ((VRAM_SINGLE_TILE_WIDTH * 2) * tileIndex), 1, &tilePallette[0], false);
@@ -106,7 +114,7 @@ void updateGraphics(Graphics* g, uint8_t* vram, uint16_t tilemapBegin, uint16_t 
       }
 
     }
-    printf("\n");
+    if (debug) printf("\n");
   }
 
   renderTex = SDL_CreateTextureFromSurface(g->renderer, g->windowSurface);
